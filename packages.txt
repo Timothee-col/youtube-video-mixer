@@ -1,0 +1,12 @@
+libglib2.0-0
+libsm6
+libxext6
+libxrender-dev
+libgomp1
+libgstreamer1.0-0
+gstreamer1.0-plugins-base
+gstreamer1.0-plugins-good
+gstreamer1.0-plugins-bad
+gstreamer1.0-plugins-ugly
+ffmpeg
+cmake

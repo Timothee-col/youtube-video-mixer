@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+youtube_mixer_env*/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Temporary files
+temp/
+*.tmp
+*.temp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Videos and media
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.mp3
+*.wav
+*.jpg
+*.jpeg
+*.png
+!logo.png
+
+# Logs
+*.log
+
+# Other
+anciennes versions/
