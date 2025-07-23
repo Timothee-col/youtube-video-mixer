@@ -1,45 +1,89 @@
 # YouTube Video Mixer Pro 🎬 - TikTok/Reels Edition
 
-Créez des vidéos verticales professionnelles pour TikTok et Instagram Reels à partir de vidéos YouTube !
+Create professional vertical videos for TikTok and Instagram Reels from YouTube videos!
 
-## 🚀 Fonctionnalités
+## 🚀 Features
 
-- **Format vertical natif** : Vidéos optimisées 9:16 (1080x1920) pour TikTok et Reels
-- **Reconnaissance faciale** : Détectez et priorisez automatiquement une personne spécifique
-- **Téléchargement HD** : Support jusqu'à 1080p+ avec plusieurs modes de qualité
-- **Gestion du texte** : Évitez ou supprimez automatiquement logos et sous-titres
-- **Audio professionnel** : Ajoutez voix off, musique avec fondus
-- **Personnalisation** : Logo en overlay, vidéo tagline, durée adaptative
-- **Mélange intelligent** : Alternance automatique entre différentes sources
+- **Native vertical format**: Optimized 9:16 videos (1080x1920) for TikTok and Reels
+- **Face recognition**: Automatically detect and prioritize a specific person
+- **HD download**: Support up to 1080p+ with multiple quality modes
+- **Text management**: Automatically avoid or remove logos and subtitles
+- **Professional audio**: Add voiceovers, music with fade effects
+- **Customization**: Logo overlay, tagline video, adaptive duration
+- **Smart shuffle**: Automatic alternation between different sources
 
-## 📱 Comment utiliser
+## 📱 How to Use
 
-1. **Configuration** : Définissez la durée et les paramètres des clips
-2. **Reconnaissance faciale** (optionnel) : Uploadez une photo de référence
-3. **Audio** (optionnel) : Ajoutez votre voix off ou musique
-4. **Personnalisation** : Ajoutez logo et/ou vidéo tagline
-5. **URLs YouTube** : Collez les liens des vidéos sources
-6. **Créer** : Cliquez sur "Créer la vidéo" et téléchargez le résultat !
+1. **Configuration**: Set the duration and clip parameters
+2. **Face recognition** (optional): Upload a reference photo
+3. **Audio** (optional): Add your voiceover or music
+4. **Customization**: Add logo and/or tagline video
+5. **YouTube URLs**: Paste the source video links
+6. **Create**: Click "Create video" and download the result!
 
-## 🎯 Cas d'usage
+## 🎯 Use Cases
 
-- Créateurs de contenu TikTok/Reels
-- Compilations de moments forts
-- Vidéos de réaction avec reconnaissance faciale
-- Montages musicaux synchronisés
-- Contenu éducatif vertical
+- TikTok/Reels content creators
+- Highlight compilations
+- Reaction videos with face recognition
+- Synchronized music montages
+- Vertical educational content
 
 ## 🛠️ Technologies
 
-- Streamlit pour l'interface
-- Face Recognition pour la détection faciale
-- MoviePy pour le montage vidéo
-- OpenCV pour le traitement d'image
-- yt-dlp pour le téléchargement YouTube
+- Streamlit for the interface
+- Face Recognition for facial detection
+- MoviePy for video editing
+- OpenCV for image processing
+- yt-dlp for YouTube downloading
 
-## 📖 Documentation
+## 🚨 Important Notes
 
-Pour plus d'informations sur le déploiement et la configuration, consultez la documentation complète.
+### Streamlit Cloud Limitations
+When deployed on Streamlit Cloud (free tier), the app has these limitations:
+- Memory limit: 1GB
+- Timeout: 15 minutes
+- Limited temporary storage
+
+### Recommendations for Best Results
+- Use short videos (< 5 min) to avoid timeouts
+- Download in "standard" or "fast" quality rather than "ultra"
+- Limit the number of source videos (2-3 max)
+- Use short clips (3-5 seconds)
+
+### Alternative Hosting
+For better performance, consider:
+- Hosting on a VPS with more resources
+- Using Google Colab with a Streamlit notebook
+- Running locally and sharing via ngrok
+
+## 📋 Installation (Local)
+
+1. Clone the repository:
+```bash
+git clone https://github.com/YOUR_USERNAME/youtube-video-mixer.git
+cd youtube-video-mixer
+```
+
+2. Create a virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+4. Run the app:
+```bash
+streamlit run youtube_mixer.py
+```
+
+## 📄 License
+
+This project is for educational and personal use. Please respect YouTube's Terms of Service and copyright laws when using this tool.
 
 ---
-Créé avec ❤️ pour les créateurs de contenu
+Created with ❤️ for content creators
