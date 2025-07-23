@@ -1,4 +1,5 @@
 [phases.setup]
+nixPkgs = ["python311", "gcc"]
 aptPkgs = [
     "build-essential",
     "cmake",
@@ -6,22 +7,22 @@ aptPkgs = [
     "liblapack-dev",
     "libx11-dev",
     "libgtk2.0-dev",
-    "libboost-all-dev",
     "libglib2.0-0",
     "libsm6",
     "libxext6",
     "libxrender-dev",
     "libgomp1",
-    "ffmpeg"
+    "ffmpeg",
+    "python3-pip"
 ]
 
 [phases.install]
 cmds = [
-    "pip install --upgrade pip",
-    "pip install cmake",
-    "pip install dlib",
-    "pip install -r requirements.txt"
+    "python -m pip install --upgrade pip",
+    "python -m pip install cmake==3.27.7",
+    "python -m pip install dlib==19.24.2",
+    "python -m pip install -r requirements.txt"
 ]
 
 [start]
-cmd = "streamlit run youtube_mixer.py --server.port=$PORT --server.address=0.0.0.0"
+cmd = "python -m streamlit run youtube_mixer.py --server.port=$PORT --server.address=0.0.0.0"
