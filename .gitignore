@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.venv
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Fichiers temporaires
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Vidéos et médias (trop lourds)
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.wmv
+*.flv
+*.webm
+*.m4v
+*.3gp
+
+# Audio
+*.mp3
+*.wav
+*.aac
+*.ogg
+*.wma
+*.m4a
+
+# Images lourdes
+*.psd
+*.ai
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Données sensibles
+cookies.txt
+.env
+.env.local
+
+# Cache
+.cache/
+cache/
+
+# Uploads temporaires
+uploads/
+downloads/
