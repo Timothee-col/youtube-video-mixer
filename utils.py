@@ -161,6 +161,8 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
         'sleep_interval': 1,  # Pause entre les téléchargements
         'max_sleep_interval': 3,
         'sleep_interval_requests': 0.5,  # Pause entre les requêtes
+        # Fix pour YouTube SABR streaming
+        'extractor_args': {'youtube': {'skip': ['dash', 'hls'], 'player_client': ['android']}}
     }
     
     # Fusionner avec la configuration de qualité

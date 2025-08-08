@@ -152,7 +152,7 @@ def extract_best_clips_with_face(
     face_detection_only: bool = False,
     remove_text_method: Optional[str] = None,
     smart_crop: bool = True,
-    use_lanczos: bool = True,
+    use_lanczos: bool = False,  # Désactivé pour économiser la mémoire sur Railway
     exclude_first_seconds: float = 0,
     face_threshold: float = 0.4
 ) -> List[VideoFileClip]:
@@ -422,20 +422,17 @@ def create_final_video(
             random.shuffle(clips)
             st.info("🔀 Clips mélangés aléatoirement")
         
-        # Réduire la résolution des clips pour économiser la mémoire
-        st.info("📐 Optimisation de la résolution pour Railway...")
+        # Optimiser les clips SANS réduire la qualité
+        st.info("🎯 Optimisation mémoire tout en gardant la qualité 1080p...")
         optimized_clips = []
         for i, clip in enumerate(clips):
-            # Réduire à 720p max pour Railway
-            if clip.h > 720:
-                scale_factor = 720 / clip.h
-                new_size = (int(clip.w * scale_factor), 720)
-                clip = clip.resize(new_size)
-                st.info(f"↘️ Clip {i+1} réduit à 720p")
+            # Garder la qualité 1080p mais optimiser la mémoire
+            # Retirer les métadonnées inutiles
+            clip = clip.without_audio()  # Déjà fait mais s'assurer
             optimized_clips.append(clip)
-            # Libérer le clip original
-            if clip != optimized_clips[-1]:
-                clip.close()
+            
+        # Désactiver Lanczos resize qui utilise trop de mémoire
+        st.info("💡 Désactivation du resize Lanczos pour économiser la mémoire")
         
         # Force garbage collection
         gc.collect()
@@ -485,13 +482,14 @@ def create_final_video(
         # Sauvegarder avec optimisations pour Railway
         st.info("🎬 Encodage de la vidéo finale... (peut prendre 2-5 minutes)")
         
-        # Optimisations pour accélérer l'encodage
+        # Optimisations pour Railway - Balance entre qualité et mémoire
         encoding_params = {
             'codec': 'libx264',
             'fps': VIDEO_FORMAT['fps'],
-            'preset': 'ultrafast',  # Plus rapide pour Railway
-            'threads': 8,  # Utiliser plus de threads
+            'preset': 'faster',  # Balance entre vitesse et compression
+            'threads': 4,  # Moins de threads = moins de RAM
             'logger': 'bar',  # Afficher la progression
+            'write_logfile': False,  # Économise la mémoire
         }
         
         # Réduire la qualité si la vidéo est longue (pour éviter timeout)

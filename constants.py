@@ -6,23 +6,14 @@ import os
 # Détection de l'environnement Railway
 IS_RAILWAY = bool(os.environ.get('RAILWAY_ENVIRONMENT'))
 
-# Formats vidéo (optimisés pour Railway si nécessaire)
-if IS_RAILWAY:
-    VIDEO_FORMAT = {
-        'width': 720,  # Réduit pour Railway
-        'height': 1280,  # Format 720p vertical
-        'ratio': 9/16,
-        'fps': 24,  # FPS réduit
-        'bitrate': '2000k'  # Bitrate réduit
-    }
-else:
-    VIDEO_FORMAT = {
-        'width': 1080,
-        'height': 1920,
-        'ratio': 9/16,
-        'fps': 30,
-        'bitrate': '8000k'
-    }
+# Formats vidéo - HAUTE QUALITÉ maintenue
+VIDEO_FORMAT = {
+    'width': 1080,
+    'height': 1920,
+    'ratio': 9/16,
+    'fps': 30,
+    'bitrate': '6000k'  # Légèrement réduit pour Railway
+}
 
 # Paramètres par défaut
 DEFAULT_SETTINGS = {
