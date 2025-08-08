@@ -21,7 +21,7 @@ def resize_and_center_vertical(
     remove_text_method: Optional[str] = None,
     text_net: Optional[cv2.dnn_Net] = None,
     face_regions: Optional[List[Dict]] = None,
-    use_lanczos: bool = True
+    use_lanczos: bool = False  # Désactivé par défaut pour Railway
 ) -> VideoFileClip:
     """
     Redimensionne la vidéo au format vertical 9:16 avec crop intelligent
@@ -64,11 +64,24 @@ def resize_and_center_vertical(
         """
         Applique un resize Lanczos de haute qualité à chaque frame
         """
-        print(f"DEBUG: Lanczos resize appelé! Frame shape: {frame.shape} -> {target_width}x{target_height}")
-        # Utiliser cv2.INTER_LANCZOS4 pour la meilleure qualité
-        result = cv2.resize(frame, (target_width, target_height), interpolation=cv2.INTER_LANCZOS4)
-        print(f"DEBUG: Lanczos terminé. Résultat shape: {result.shape}")
-        return result
+        # Validation pour éviter les erreurs avec des frames None
+        if frame is None:
+            st.error("❌ Frame None détecté dans Lanczos resize!")
+            # Retourner une frame noire de la bonne taille
+            return np.zeros((target_height, target_width, 3), dtype=np.uint8)
+        
+        try:
+            # Vérifier que la frame a la bonne forme
+            if not isinstance(frame, np.ndarray) or len(frame.shape) != 3:
+                st.error(f"❌ Frame invalide: type={type(frame)}, shape={getattr(frame, 'shape', 'N/A')}")
+                return np.zeros((target_height, target_width, 3), dtype=np.uint8)
+            
+            # Utiliser cv2.INTER_LANCZOS4 pour la meilleure qualité
+            result = cv2.resize(frame, (target_width, target_height), interpolation=cv2.INTER_LANCZOS4)
+            return result
+        except Exception as e:
+            st.error(f"❌ Erreur Lanczos resize: {str(e)}")
+            return np.zeros((target_height, target_width, 3), dtype=np.uint8)
     
     # Si déjà au bon ratio
     if abs(orig_ratio - target_ratio) < 0.1:
@@ -232,6 +245,23 @@ def extract_best_clips_with_face(
                 
                 # Convertir au format vertical
                 try:
+                    # Vérifier que le clip est valide avant le resize
+                    if clip is None or not hasattr(clip, 'get_frame'):
+                        st.error(f"❌ Clip {i+1} invalide avant resize")
+                        continue
+                    
+                    # Tester l'accès à une frame pour valider le clip
+                    try:
+                        test_frame = clip.get_frame(0)
+                        if test_frame is None:
+                            st.error(f"❌ Clip {i+1} retourne des frames None")
+                            clip.close()
+                            continue
+                    except Exception as e:
+                        st.error(f"❌ Impossible d'accéder aux frames du clip {i+1}: {str(e)}")
+                        clip.close()
+                        continue
+                    
                     clip = resize_and_center_vertical(
                         clip,
                         remove_text_method=remove_text_method if remove_text_method else None,
@@ -619,7 +649,7 @@ def add_tagline(video: VideoFileClip, tagline_path: str) -> VideoFileClip:
         tagline_clip = VideoFileClip(tagline_path)
         
         # Redimensionner au format 9:16
-        tagline_clip = resize_and_center_vertical(tagline_clip)
+        tagline_clip = resize_and_center_vertical(tagline_clip, use_lanczos=False)
         
         # Si la vidéo a un audio, garder la tagline sans audio
         if video.audio is not None:
