@@ -435,25 +435,50 @@ def create_final_video(
         if tagline_path:
             final_video = add_tagline(final_video, tagline_path)
         
-        # Sauvegarder
-        if final_video.audio is not None:
-            final_video.write_videofile(
-                output_path,
-                codec='libx264',
-                audio_codec='aac',
-                fps=VIDEO_FORMAT['fps'],
-                bitrate=VIDEO_FORMAT['bitrate'],
-                threads=4
-            )
+        # Sauvegarder avec optimisations pour Railway
+        st.info("🎬 Encodage de la vidéo finale... (peut prendre 2-5 minutes)")
+        
+        # Optimisations pour accélérer l'encodage
+        encoding_params = {
+            'codec': 'libx264',
+            'fps': VIDEO_FORMAT['fps'],
+            'preset': 'ultrafast',  # Plus rapide pour Railway
+            'threads': 8,  # Utiliser plus de threads
+            'logger': 'bar',  # Afficher la progression
+        }
+        
+        # Réduire la qualité si la vidéo est longue (pour éviter timeout)
+        if final_video.duration > 60:
+            encoding_params['bitrate'] = '2000k'  # Qualité réduite
+            st.warning("⚠️ Qualité réduite pour optimiser le temps d'encodage")
         else:
-            final_video.write_videofile(
-                output_path,
-                codec='libx264',
-                audio=False,
-                fps=VIDEO_FORMAT['fps'],
-                bitrate=VIDEO_FORMAT['bitrate'],
-                threads=4
-            )
+            encoding_params['bitrate'] = VIDEO_FORMAT['bitrate']
+        
+        if final_video.audio is not None:
+            encoding_params['audio_codec'] = 'aac'
+            encoding_params['audio_bitrate'] = '128k'  # Audio optimisé
+        else:
+            encoding_params['audio'] = False
+            
+        # Progress tracking
+        progress_bar = st.progress(0)
+        progress_text = st.empty()
+        
+        def progress_callback(frame, total_frames):
+            if total_frames > 0:
+                progress = int((frame / total_frames) * 100)
+                progress_bar.progress(progress)
+                progress_text.text(f"Encodage: {progress}%")
+        
+        # Écrire la vidéo
+        final_video.write_videofile(
+            output_path,
+            **encoding_params,
+            temp_audiofile=output_path.replace('.mp4', '_temp_audio.m4a')
+        )
+        
+        progress_bar.progress(100)
+        progress_text.text("✅ Encodage terminé!")
         
         # Libérer la mémoire
         for clip in clips:

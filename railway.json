@@ -3,9 +3,9 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "streamlit run youtube_mixer.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true --browser.gatherUsageStats=false",
+    "startCommand": "streamlit run youtube_mixer.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true --browser.gatherUsageStats=false --server.maxUploadSize=500 --server.maxMessageSize=500",
     "healthcheckPath": "/_stcore/health",
-    "healthcheckTimeout": 100,
+    "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
