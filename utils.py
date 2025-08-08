@@ -79,14 +79,14 @@ def safe_filename(filename: str) -> str:
 
 def get_best_available_format(url: str, quality_mode: str) -> str:
     """
-    Analyse les formats disponibles pour une vidéo et retourne le meilleur format selon le mode
+    Analyse les formats disponibles pour une vidéo et retourne un sélecteur intelligent
     
     Args:
         url: URL de la vidéo YouTube
         quality_mode: Mode de qualité demandé
         
     Returns:
-        str: Format selector string optimal
+        str: Format selector string intelligent basé sur les caractéristiques
     """
     try:
         with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
@@ -94,63 +94,66 @@ def get_best_available_format(url: str, quality_mode: str) -> str:
             formats = info.get('formats', [])
             video_formats = [f for f in formats if f.get('vcodec') != 'none' and f.get('height')]
             
-            # Trier par qualité (hauteur puis bitrate)
-            video_formats.sort(key=lambda x: (x.get('height', 0), x.get('vbr', 0) or 0), reverse=True)
+            # Analyser ce qui est réellement disponible
+            has_1080p_premium = any(f.get('height') == 1080 and (f.get('vbr', 0) or 0) > 3000 for f in video_formats)
+            has_1080p_standard = any(f.get('height') == 1080 and (f.get('vbr', 0) or 0) > 500 for f in video_formats)
+            has_720p_good = any(f.get('height') == 720 and (f.get('vbr', 0) or 0) > 1000 for f in video_formats)
+            has_720p = any(f.get('height') == 720 for f in video_formats)
+            has_480p = any(f.get('height') == 480 for f in video_formats)
             
-            # Analyser les formats disponibles par qualité
-            format_1080p_premium = None  # >3000 kbps
-            format_1080p_standard = None # >500 kbps  
-            format_720p_good = None      # >1000 kbps
-            format_720p_standard = None  # >300 kbps
-            
-            for f in video_formats:
-                format_id = f.get('format_id')
-                height = f.get('height', 0)
-                vbr = f.get('vbr', 0) or 0
-                
-                # Catégoriser les formats 1080p
-                if height == 1080:
-                    if vbr > 3000 and not format_1080p_premium:
-                        format_1080p_premium = format_id
-                    elif vbr > 500 and not format_1080p_standard:
-                        format_1080p_standard = format_id
-                        
-                # Catégoriser les formats 720p  
-                elif height == 720:
-                    if vbr > 1000 and not format_720p_good:
-                        format_720p_good = format_id
-                    elif vbr > 300 and not format_720p_standard:
-                        format_720p_standard = format_id
-            
-            # Construire le format selector selon le mode demandé
+            # Construire le sélecteur intelligent selon ce qui existe
             if quality_mode == 'ultra':
-                # Ultra: Priorité aux formats premium puis fallback
-                candidates = [format_1080p_premium, format_1080p_standard, format_720p_good]
-                candidates = [f for f in candidates if f]  # Filtrer les None
-                if candidates:
-                    return f"{'+140/'.join(candidates)}+140/best[height>=720]/best"
+                # Ultra: Chercher le meilleur disponible par caractéristiques
+                selectors = []
+                if has_1080p_premium:
+                    selectors.append('bestvideo[height=1080][vbr>3000]+bestaudio')
+                if has_1080p_standard:
+                    selectors.append('bestvideo[height=1080][vbr>500]+bestaudio') 
+                if has_720p_good:
+                    selectors.append('bestvideo[height=720][vbr>1000]+bestaudio')
+                # Fallback
+                selectors.append('bestvideo[height>=720]+bestaudio')
+                selectors.append('best[height>=720]')
+                selectors.append('best')
+                return '/'.join(selectors)
                     
             elif quality_mode == 'high':
-                # High: Priorité 1080p standard puis 720p bon
-                candidates = [format_1080p_standard, format_720p_good, format_720p_standard]
-                candidates = [f for f in candidates if f]
-                if candidates:
-                    return f"{'+140/'.join(candidates)}+140/best[height>=720]/best"
+                # High: Équilibré entre qualité et compatibilité
+                selectors = []
+                if has_1080p_standard:
+                    selectors.append('bestvideo[height=1080]+bestaudio')
+                if has_720p:
+                    selectors.append('bestvideo[height=720]+bestaudio')
+                selectors.append('bestvideo[height>=720]+bestaudio')
+                selectors.append('best[height>=720]') 
+                selectors.append('best')
+                return '/'.join(selectors)
                     
             elif quality_mode == 'standard':
-                # Standard: 720p ou bon 480p
-                candidates = [format_720p_standard, format_720p_good]
-                candidates = [f for f in candidates if f]
-                if candidates:
-                    return f"{'+140/'.join(candidates)}+140/best[height>=480]/best"
-                    
-            # Fallback si aucun format spécifique trouvé
-            return 'best[height>=720]/best[height>=480]/best'
+                # Standard: Compatible et fiable
+                selectors = []
+                if has_720p:
+                    selectors.append('bestvideo[height=720]+bestaudio')
+                if has_480p:
+                    selectors.append('bestvideo[height=480]+bestaudio')
+                selectors.append('bestvideo[height>=480]+bestaudio')
+                selectors.append('best[height>=480]')
+                selectors.append('best')
+                return '/'.join(selectors)
+                
+            else:  # fast
+                # Fast: Prendre ce qui marche
+                return 'best/bestvideo+bestaudio'
             
     except Exception as e:
         st.warning(f"⚠️ Analyse des formats échouée: {str(e)[:100]}...")
-        # Fallback sur l'ancienne méthode
-        return 'best[height>=720]/best[height>=480]/best'
+        # Fallback intelligent générique
+        if quality_mode == 'ultra':
+            return 'bestvideo[height>=1080]+bestaudio/bestvideo[height>=720]+bestaudio/best[height>=720]/best'
+        elif quality_mode == 'high':
+            return 'bestvideo[height>=720]+bestaudio/best[height>=720]/best'
+        else:
+            return 'best[height>=480]/best'
 
 def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str = 'high', show_formats: bool = False) -> List[Dict]:
     """
