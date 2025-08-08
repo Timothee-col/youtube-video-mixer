@@ -36,6 +36,17 @@ def resize_and_center_vertical(
     Returns:
         VideoFileClip: Clip redimensionné
     """
+    # VALIDATION CRITIQUE en entrée
+    if clip is None:
+        st.error("❌ ERREUR FATALE: clip None passé à resize_and_center_vertical")
+        return None
+    
+    if not hasattr(clip, 'size') or not hasattr(clip, 'get_frame'):
+        st.error(f"❌ ERREUR: clip invalide passé à resize_and_center_vertical (type: {type(clip)})")
+        return None
+    
+    st.info(f"🔄 resize_and_center_vertical: début traitement clip (durée: {getattr(clip, 'duration', 'N/A')}s)")
+    
     target_width = VIDEO_FORMAT['width']
     target_height = VIDEO_FORMAT['height']
     target_ratio = VIDEO_FORMAT['ratio']
@@ -229,19 +240,33 @@ def extract_best_clips_with_face(
             actual_end = min(segment['end'], duration)
             
             if actual_end > actual_start and actual_end - actual_start >= 1:
+                st.info(f"🎬 Création subclip {i+1}: {actual_start:.1f}s à {actual_end:.1f}s")
                 clip = video.subclip(actual_start, actual_end)
+                
+                # VALIDATION CRITIQUE du clip créé
+                if clip is None:
+                    st.error(f"❌ ERREUR: video.subclip() a retourné None pour clip {i+1}")
+                    continue
+                    
+                st.success(f"✅ Subclip {i+1} créé avec succès (durée: {clip.duration:.1f}s)")
                 
                 # Détection des visages pour le crop intelligent
                 face_regions = []
                 if smart_crop:
                     try:
+                        st.info(f"🎯 Test d'accès frame pour crop intelligent clip {i+1}...")
                         frame = clip.get_frame(0.1)
-                        face_regions = get_face_regions_for_crop(frame, target_face_encoding, face_threshold)
-                        
-                        if face_regions:
-                            st.success(f"   🎯 {len(face_regions)} visage(s) détecté(s) pour le crop intelligent")
+                        if frame is None:
+                            st.warning(f"⚠️ Frame None retournée par clip {i+1}.get_frame(0.1)")
+                        else:
+                            st.success(f"✅ Frame OK pour clip {i+1}, shape: {frame.shape}")
+                            face_regions = get_face_regions_for_crop(frame, target_face_encoding, face_threshold)
+                            
+                            if face_regions:
+                                st.success(f"   🎯 {len(face_regions)} visage(s) détecté(s) pour le crop intelligent")
                     except Exception as e:
-                        st.warning(f"   ⚠️ Crop intelligent désactivé: {str(e)}")
+                        st.error(f"   ❌ ERREUR crop intelligent clip {i+1}: {str(e)}")
+                        st.warning(f"   ⚠️ Crop intelligent désactivé pour clip {i+1}")
                 
                 # Convertir au format vertical
                 try:
