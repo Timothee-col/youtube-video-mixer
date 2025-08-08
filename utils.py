@@ -130,77 +130,75 @@ def get_best_available_format(url: str, quality_mode: str) -> str:
             mp4_formats_720p = [f for f in video_formats if f.get('ext') == 'mp4' and f.get('height') == 720 and f.get('acodec') != 'none']
             
             if quality_mode == 'ultra':
+                # ULTRA: Vidéo seule HD+ - PRIORITÉ H.264 (compatible)
                 selectors = []
-                # Priorité aux MP4 directs (comme les sites de téléchargement)
-                if mp4_formats_1080p:
-                    best_mp4 = max(mp4_formats_1080p, key=lambda x: x.get('vbr', 0) or 0)
-                    selectors.append(str(best_mp4.get('format_id')))
-                if mp4_formats_720p:
-                    best_720_mp4 = max(mp4_formats_720p, key=lambda x: x.get('vbr', 0) or 0) 
-                    selectors.append(str(best_720_mp4.get('format_id')))
-                # Puis les formats séparés si nécessaire
+                # Priorité absolue H.264 1080p+
+                selectors.append('bestvideo[vcodec^=avc][height>=1080]')
+                selectors.append('bestvideo[vcodec^=avc][height>=720]')
+                # Si pas de H.264, éviter AV1 explicitement
                 if has_1080p_premium:
-                    selectors.append('bestvideo[height=1080][vbr>3000]+bestaudio/best')
+                    selectors.append('bestvideo[height=1080][vbr>3000][vcodec!=av01]')
                 if has_1080p_standard:
-                    selectors.append('bestvideo[height=1080]+bestaudio/best')
-                # Fallback génériques
-                selectors.append('best[height>=720][ext=mp4]')
-                selectors.append('best[height>=720]')
-                selectors.append('best')
+                    selectors.append('bestvideo[height=1080][vcodec!=av01]')
+                if has_720p_good:
+                    selectors.append('bestvideo[height=720][vbr>1000][vcodec!=av01]')
+                if has_720p:
+                    selectors.append('bestvideo[height=720][vcodec!=av01]')
+                # Fallback sans AV1
+                selectors.append('bestvideo[height>=720][vcodec!=av01]')
+                selectors.append('bestvideo[height>=480][vcodec!=av01]')
+                selectors.append('bestvideo[vcodec!=av01]')
+                selectors.append('bestvideo')  # Dernier recours
                 return '/'.join(selectors)
                     
             elif quality_mode == 'high':
-                # High: Équilibré entre qualité et compatibilité
+                # HIGH: Vidéo seule HD - PRIORITÉ H.264
                 selectors = []
-                # Priorité aux MP4 directs (comme les sites de téléchargement)
-                if mp4_formats_1080p:
-                    selectors.append(str(mp4_formats_1080p[0].get('format_id')))
-                if mp4_formats_720p:
-                    selectors.append(str(mp4_formats_720p[0].get('format_id')))
-                # Puis les formats séparés si nécessaire
+                # Priorité H.264 720p+
+                selectors.append('bestvideo[vcodec^=avc][height>=720]')
+                selectors.append('bestvideo[vcodec^=avc][height>=480]')
+                # Puis HD sans AV1
                 if has_1080p_standard:
-                    selectors.append('bestvideo[height=1080]+bestaudio')
+                    selectors.append('bestvideo[height=1080][vcodec!=av01]')
                 if has_720p:
-                    selectors.append('bestvideo[height=720]+bestaudio')
-                selectors.append('best[height>=720][ext=mp4]')
-                selectors.append('best[height>=720]') 
-                selectors.append('best')
+                    selectors.append('bestvideo[height=720][vcodec!=av01]')
+                selectors.append('bestvideo[height>=720][vcodec!=av01]')
+                selectors.append('bestvideo[height>=480][vcodec!=av01]')
+                selectors.append('bestvideo[vcodec!=av01]')
+                selectors.append('bestvideo')
                 return '/'.join(selectors)
                     
             elif quality_mode == 'standard':
-                # Standard: Compatible et fiable
+                # STANDARD: Vidéo seule compatible - PRIORITÉ H.264
                 selectors = []
-                # Chercher les MP4 directs en 720p et 480p
-                mp4_formats_480p = [f for f in video_formats if f.get('ext') == 'mp4' and f.get('height') == 480 and f.get('acodec') != 'none']
-                if mp4_formats_720p:
-                    selectors.append(str(mp4_formats_720p[0].get('format_id')))
-                if mp4_formats_480p:
-                    selectors.append(str(mp4_formats_480p[0].get('format_id')))
-                # Puis les formats séparés
+                # H.264 prioritaire pour compatibilité
+                selectors.append('bestvideo[vcodec^=avc][height>=480]')
+                selectors.append('bestvideo[vcodec^=avc]')
+                # Puis formats compatibles sans AV1
                 if has_720p:
-                    selectors.append('bestvideo[height=720]+bestaudio')
+                    selectors.append('bestvideo[height=720][vcodec!=av01]')
                 if has_480p:
-                    selectors.append('bestvideo[height=480]+bestaudio')
-                selectors.append('best[height>=480][ext=mp4]')
-                selectors.append('best[height>=480]')
-                selectors.append('best')
+                    selectors.append('bestvideo[height=480][vcodec!=av01]')
+                selectors.append('bestvideo[height>=480][vcodec!=av01]')
+                selectors.append('bestvideo[vcodec!=av01]')
+                selectors.append('bestvideo')
                 return '/'.join(selectors)
                 
             else:  # fast
-                # Fast: Prendre ce qui marche, privilégier MP4
-                return 'best[ext=mp4]/best/bestvideo+bestaudio'
+                # FAST: Vidéo seule, compatible prioritaire
+                return 'bestvideo[vcodec^=avc]/bestvideo[vcodec!=av01]/bestvideo'
             
     except Exception as e:
         st.warning(f"⚠️ Analyse des formats échouée: {str(e)[:100]}...")
-        # Fallback encore plus robuste
+        # Fallback encore plus robuste - VIDÉO SEULE COMPATIBLE
         if quality_mode == 'ultra':
-            return 'bestvideo[height>=1080]+bestaudio/bestvideo[height>=720]+bestaudio/best[height>=720]/best[height>=480]/best'
+            return 'bestvideo[vcodec^=avc][height>=1080]/bestvideo[height>=1080][vcodec!=av01]/bestvideo[height>=720][vcodec!=av01]/bestvideo[vcodec!=av01]/bestvideo'
         elif quality_mode == 'high':
-            return 'bestvideo[height>=720]+bestaudio/best[height>=720]/best[height>=480]/best'
+            return 'bestvideo[vcodec^=avc][height>=720]/bestvideo[height>=720][vcodec!=av01]/bestvideo[height>=480][vcodec!=av01]/bestvideo[vcodec!=av01]/bestvideo'
         elif quality_mode == 'standard':
-            return 'best[height>=480]/best[height>=360]/best'
+            return 'bestvideo[vcodec^=avc]/bestvideo[height>=480][vcodec!=av01]/bestvideo[height>=360][vcodec!=av01]/bestvideo[vcodec!=av01]/bestvideo'
         else:
-            return 'best'
+            return 'bestvideo[vcodec^=avc]/bestvideo[vcodec!=av01]/bestvideo'
 
 def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str = 'high', show_formats: bool = False) -> List[Dict]:
     """
@@ -229,7 +227,7 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
     # NOUVEAU 2025: Détection intelligente des formats pour chaque URL
     st.info(f"🔍 Mode {quality_mode}: Analyse intelligente des formats disponibles...")
     
-    # STRATÉGIE "YOUTUBE TO MP4" - Options optimisées comme les sites de téléchargement
+    # STRATÉGIE "YOUTUBE TO MP4" - VIDÉO SEULE comme les sites pros
     mobile_headers = {
         'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -251,12 +249,9 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
         'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
         'restrictfilenames': True,
         'windowsfilenames': True,
-        # Post-processing minimal pour vitesse
-        'postprocessors': [{
-            'key': 'FFmpegVideoConvertor',
-            'preferedformat': 'mp4',
-        }],
-        'keepvideo': False,
+        # Post-processing minimal pour vitesse - VIDÉO SEULE
+        'postprocessors': [],  # Pas de post-processing pour vidéo seule
+        'keepvideo': True,  # Garder la vidéo (pas de merge)
         'overwrites': True,
         'nocheckcertificate': True,
         # Options de téléchargement optimisées
@@ -307,18 +302,20 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
         # Forcer le client embedder
         base_opts['extractor_args']['youtube']['player_client'].insert(0, 'web_embedded')
     
-    st.success("✅ STRATÉGIE YOUTUBE-TO-MP4 2025 - Bypass comme les pros")
+    st.success("✅ STRATÉGIE YOUTUBE-TO-MP4 2025 - H.264 COMPATIBLE")
     st.info(f"📱 Clients: {base_opts['extractor_args']['youtube'].get('player_client', 'ERREUR')}")
     st.info(f"🌍 Mode: {'Railway Bypass' if IS_RAILWAY else 'Local Direct'}")
     st.info(f"🎯 Headers: Mobile iOS 17")
+    st.info("🎥 VIDÉO SEULE: Pas d'audio = pas de merge")
+    st.info("🛡️ ANTI-AV1: Priorité H.264 pour compatibilité ffmpeg/moviepy")
     
-    # Mode avec détection intelligente
+    # Mode avec détection intelligente - COMPATIBLE H.264
     if quality_mode == 'ultra':
-        st.success(f"🚀 Mode ULTRA: Recherche formats premium (>3000 kbps)")
+        st.success(f"🚀 Mode ULTRA: Recherche H.264 1080p+ (compatible moviepy)")
     elif quality_mode == 'high':
-        st.info(f"📹 Mode HIGH: Recherche 1080p standard puis 720p")
+        st.info(f"📹 Mode HIGH: Recherche H.264 720p+ (évite AV1)")
     else:
-        st.info(f"📺 Mode {quality_mode}: Optimisé pour la compatibilité")
+        st.info(f"📺 Mode {quality_mode}: Vidéo H.264 compatible")
     
     for idx, url in enumerate(urls):
         try:
@@ -385,12 +382,12 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
                                     st.write(f"{i}. {quality_emoji} **{f.get('format_id')}**: {f.get('width')}x{f.get('height')} - "
                                             f"{f.get('vcodec')} - {f.get('vbr', 'N/A') if f.get('vbr') else 'N/A'} kbps")
                         
-                        # Télécharger avec DÉTECTION INTELLIGENTE 2025
+                        # Télécharger avec ANTI-AV1 2025 - H.264 PRIORITAIRE
                         quality_messages = {
-                            'ultra': f'🚀 INTELLIGENT 2025: Téléchargement format premium...',
-                            'high': f'🎯 INTELLIGENT 2025: Téléchargement format optimal...',
-                            'standard': f'📹 INTELLIGENT 2025: Téléchargement adaptatif...',
-                            'fast': f'⚡ INTELLIGENT 2025: Téléchargement rapide...'
+                            'ultra': f'🚀 H.264 ULTRA 2025: Téléchargement compatible HD+...',
+                            'high': f'🎯 H.264 HIGH 2025: Téléchargement compatible HD...',
+                            'standard': f'📹 H.264 STD 2025: Téléchargement compatible...',
+                            'fast': f'⚡ H.264 FAST 2025: Téléchargement compatible rapide...'
                         }
                         
                         with st.spinner(quality_messages.get(quality_mode, f'🤖 Format {optimal_format[:20]}...')):
