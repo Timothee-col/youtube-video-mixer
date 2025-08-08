@@ -530,27 +530,117 @@ def create_final_video(
         # Force garbage collection
         gc.collect()
         
+        # Validation approfondie des clips avant concaténation
+        st.info("🔧 Validation approfondie des clips pour concaténation...")
+        concat_ready_clips = []
+        
+        for i, clip in enumerate(optimized_clips):
+            try:
+                st.info(f"🔍 Test concaténation clip {i+1}/{len(optimized_clips)}...")
+                
+                # Tests approfondis
+                if not hasattr(clip, 'get_frame') or not hasattr(clip, 'duration'):
+                    st.error(f"❌ Clip {i+1}: attributs manquants")
+                    continue
+                
+                # Test d'accès à plusieurs frames
+                test_times = [0, min(0.5, clip.duration/2), min(1.0, clip.duration-0.1)]
+                frame_ok = True
+                
+                for test_time in test_times:
+                    if test_time < 0 or test_time >= clip.duration:
+                        continue
+                    try:
+                        frame = clip.get_frame(test_time)
+                        if frame is None:
+                            st.error(f"❌ Clip {i+1}: frame None à t={test_time:.1f}s")
+                            frame_ok = False
+                            break
+                    except Exception as e:
+                        st.error(f"❌ Clip {i+1}: erreur frame t={test_time:.1f}s - {str(e)}")
+                        frame_ok = False
+                        break
+                
+                if frame_ok:
+                    # Test de preview pour s'assurer que MoviePy peut gérer le clip
+                    try:
+                        preview = clip.subclip(0, min(0.1, clip.duration))
+                        preview.close()
+                        concat_ready_clips.append(clip)
+                        st.success(f"✅ Clip {i+1} prêt pour concaténation")
+                    except Exception as e:
+                        st.error(f"❌ Clip {i+1}: échec test preview - {str(e)}")
+                        clip.close()
+                else:
+                    clip.close()
+                    
+            except Exception as e:
+                st.error(f"❌ Erreur validation clip {i+1}: {str(e)}")
+                if clip:
+                    clip.close()
+        
+        if not concat_ready_clips:
+            st.error("❌ Aucun clip valide pour la concaténation!")
+            return False
+            
+        st.info(f"✅ {len(concat_ready_clips)}/{len(optimized_clips)} clips prêts pour concaténation")
+        
         # Concaténer par petits groupes pour économiser la mémoire
         st.info("🔗 Assemblage optimisé des clips...")
-        if len(optimized_clips) > 5:
-            # Traiter par groupes de 5
-            temp_videos = []
-            for i in range(0, len(optimized_clips), 5):
-                group = optimized_clips[i:i+5]
-                temp_video = concatenate_videoclips(group, method="compose")
-                temp_videos.append(temp_video)
-                # Libérer les clips du groupe
-                for clip in group:
-                    clip.close()
-                gc.collect()
+        try:
+            if len(concat_ready_clips) > 5:
+                # Traiter par groupes de 3 (plus petit pour plus de stabilité)
+                temp_videos = []
+                for i in range(0, len(concat_ready_clips), 3):
+                    group = concat_ready_clips[i:i+3]
+                    st.info(f"🔗 Concaténation groupe {i//3 + 1}: {len(group)} clips")
+                    
+                    # Méthode de concaténation plus robuste
+                    try:
+                        temp_video = concatenate_videoclips(group, method="chain")
+                        temp_videos.append(temp_video)
+                        st.success(f"✅ Groupe {i//3 + 1} assemblé")
+                    except Exception as e:
+                        st.error(f"❌ Erreur groupe {i//3 + 1}: {str(e)}")
+                        # Fallback: essayer un par un
+                        for j, single_clip in enumerate(group):
+                            try:
+                                temp_videos.append(single_clip)
+                                st.warning(f"⚠️ Clip {i+j+1} ajouté individuellement")
+                            except Exception as e2:
+                                st.error(f"❌ Impossible d'ajouter clip {i+j+1}: {str(e2)}")
+                    
+                    # Libérer la mémoire
+                    gc.collect()
+                
+                if not temp_videos:
+                    st.error("❌ Aucun groupe n'a pu être assemblé")
+                    return False
+                
+                # Assembler les vidéos temporaires
+                st.info(f"🔗 Assemblage final de {len(temp_videos)} groupes...")
+                final_video = concatenate_videoclips(temp_videos, method="chain")
+                
+                # Libérer les vidéos temporaires
+                for temp in temp_videos:
+                    if hasattr(temp, 'close'):
+                        temp.close()
+            else:
+                st.info("🔗 Concaténation directe des clips...")
+                final_video = concatenate_videoclips(concat_ready_clips, method="chain")
+                
+        except Exception as e:
+            st.error(f"❌ ERREUR CONCATÉNATION: {str(e)}")
+            st.warning("🚨 Tentative de sauvegarde d'urgence...")
             
-            # Assembler les vidéos temporaires
-            final_video = concatenate_videoclips(temp_videos, method="compose")
-            # Libérer les vidéos temporaires
-            for temp in temp_videos:
-                temp.close()
-        else:
-            final_video = concatenate_videoclips(optimized_clips, method="compose")
+            # Fallback: prendre seulement le premier clip valide
+            if concat_ready_clips:
+                st.warning("⚠️ Sauvegarde du premier clip seulement")
+                final_video = concat_ready_clips[0]
+                for clip in concat_ready_clips[1:]:
+                    clip.close()
+            else:
+                return False
         
         # Ajuster la durée si nécessaire
         if output_duration and not (audio_config and audio_config.get('adapt_to_audio')):
@@ -620,13 +710,30 @@ def create_final_video(
         
         # Libérer la mémoire
         for clip in clips:
-            clip.close()
-        final_video.close()
+            if hasattr(clip, 'close'):
+                try:
+                    clip.close()
+                except:
+                    pass
+        
+        if hasattr(final_video, 'close'):
+            try:
+                final_video.close()
+            except:
+                pass
         
         return True
         
     except Exception as e:
         st.error(f"Erreur lors de la création de la vidéo: {str(e)}")
+        st.error(f"Détails de l'erreur: {type(e).__name__}")
+        # Nettoyer en cas d'erreur
+        try:
+            for clip in clips:
+                if hasattr(clip, 'close'):
+                    clip.close()
+        except:
+            pass
         return False
 
 def smart_shuffle_clips(clips_by_video: Dict[int, List[VideoFileClip]]) -> List[VideoFileClip]:
