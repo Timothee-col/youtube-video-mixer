@@ -7,7 +7,7 @@ import shutil
 import streamlit as st
 import time
 from typing import List, Dict, Optional, Tuple
-from constants import YOUTUBE_DL_OPTIONS, SUPPORTED_EXTENSIONS
+from constants import YOUTUBE_DL_OPTIONS, SUPPORTED_EXTENSIONS, IS_RAILWAY
 
 # Import de yt-dlp
 try:
@@ -211,7 +211,8 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
         'socket_timeout': 30,
         'extractor_retries': 3,
         # ===== OPTIONS ANTI-BOT =====
-        'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        # User-Agent plus récent et varié
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         'referer': 'https://www.youtube.com/',
         'http_headers': {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -236,7 +237,7 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
         'force_generic_extractor': False,
         # Options pour contourner les restrictions YouTube
         'geo_bypass': True,
-        'geo_bypass_country': 'DE'  # Allemagne au lieu des US
+        'geo_bypass_country': 'FR'  # France comme ton IP locale
     }
     
     # Configuration de base pour tous les téléchargements
@@ -246,8 +247,15 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
     }
     
     # DEBUG: Nouvelle version intelligente 2025
+    if IS_RAILWAY:
+        st.warning("🚂 Environnement Railway détecté - Restrictions YouTube possibles")
+        # Ajouter des options spécifiques pour Railway
+        base_opts['extractor_args']['youtube']['player_client'] = ['tv_embedded', 'mweb', 'android']
+        base_opts['geo_bypass_country'] = 'US'  # US souvent moins restrictif pour serveurs
+    
     st.success("✅ DÉTECTION INTELLIGENTE 2025 - Analyse des formats par vidéo")
     st.info(f"🔑 Client: {base_opts['extractor_args']['youtube'].get('player_client', 'ERREUR')}")
+    st.info(f"🌍 Environnement: {'Railway' if IS_RAILWAY else 'Local'}")
     
     # Mode avec détection intelligente
     if quality_mode == 'ultra':
