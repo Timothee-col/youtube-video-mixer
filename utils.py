@@ -147,13 +147,15 @@ def get_best_available_format(url: str, quality_mode: str) -> str:
             
     except Exception as e:
         st.warning(f"⚠️ Analyse des formats échouée: {str(e)[:100]}...")
-        # Fallback intelligent générique
+        # Fallback encore plus robuste
         if quality_mode == 'ultra':
-            return 'bestvideo[height>=1080]+bestaudio/bestvideo[height>=720]+bestaudio/best[height>=720]/best'
+            return 'bestvideo[height>=1080]+bestaudio/bestvideo[height>=720]+bestaudio/best[height>=720]/best[height>=480]/best'
         elif quality_mode == 'high':
-            return 'bestvideo[height>=720]+bestaudio/best[height>=720]/best'
+            return 'bestvideo[height>=720]+bestaudio/best[height>=720]/best[height>=480]/best'
+        elif quality_mode == 'standard':
+            return 'best[height>=480]/best[height>=360]/best'
         else:
-            return 'best[height>=480]/best'
+            return 'best'
 
 def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str = 'high', show_formats: bool = False) -> List[Dict]:
     """
@@ -196,7 +198,7 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
         'keepvideo': False,
         'overwrites': True,
         'nocheckcertificate': True,
-        'no_color': True,
+        # 'no_color': True,  # Commenté car conflit avec color
         'concurrent_fragment_downloads': 1,
         'http_chunk_size': 10485760,  # 10MB chunks
         'retries': 3,
@@ -219,9 +221,9 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
         },
-        'sleep_interval': 1,  # Pause entre les téléchargements
-        'max_sleep_interval': 3,
-        'sleep_interval_requests': 0.5,  # Pause entre les requêtes
+        'sleep_interval': 0.5,  # Réduit pour éviter trop de délais
+        'max_sleep_interval': 1,
+        'sleep_interval_requests': 0.25,  # Pause courte entre requêtes
         # CORRECTION 2025: YOUTUBE PO TOKEN FIX
         'extractor_args': {
             'youtube': {
@@ -269,9 +271,20 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
             st.info(f"🎥 Téléchargement vidéo {idx+1}/{len(urls)}: {url}")
             
             # ÉTAPE 1: Analyser les formats disponibles pour cette vidéo spécifique
-            with st.spinner(f"🔍 Analyse des formats pour vidéo {idx+1}..."):
-                optimal_format = get_best_available_format(url, quality_mode)
-                st.info(f"🎯 Format optimal détecté: {optimal_format}")
+            optimal_format = None
+            try:
+                with st.spinner(f"🔍 Analyse des formats pour vidéo {idx+1}..."):
+                    optimal_format = get_best_available_format(url, quality_mode)
+                    st.info(f"🎯 Format optimal détecté: {optimal_format[:50]}...")
+            except Exception as e:
+                st.warning(f"⚠️ Analyse échouée, utilisation du format par défaut")
+                # Format par défaut selon le mode
+                if quality_mode == 'ultra':
+                    optimal_format = 'best[height>=720]/best[height>=480]/best'
+                elif quality_mode == 'high':
+                    optimal_format = 'best[height>=720]/best[height>=480]/best'
+                else:
+                    optimal_format = 'best'
             
             # ÉTAPE 2: Télécharger avec le format optimal
             download_success = False
@@ -360,11 +373,18 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
                         
                     elif "403" in error_msg or "forbidden" in error_msg.lower():
                         st.warning("⚠️ Erreur 403, essai avec méthode alternative...")
-                        # Simplifier les options
+                        # Simplifier les options et le format
                         fallback_opts = ydl_opts.copy()
                         fallback_opts['format'] = 'best[ext=mp4]/best'
                         fallback_opts.pop('concurrent_fragment_downloads', None)
                         ydl_opts = fallback_opts
+                        
+                    elif "Requested format is not available" in error_msg:
+                        st.warning("⚠️ Format demandé non disponible, simplification...")
+                        # Utiliser un format plus simple
+                        simple_opts = ydl_opts.copy()
+                        simple_opts['format'] = 'best'
+                        ydl_opts = simple_opts
                         
                     elif attempts >= max_attempts:
                         st.error(f"❌ Échec après {max_attempts} tentatives: {error_msg}")
