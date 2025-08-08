@@ -1,5 +1,5 @@
 streamlit==1.29.0
-yt-dlp==2024.8.6
+yt-dlp>=2025.7.21
 moviepy==1.0.1
 opencv-python-headless==4.8.1.78
 numpy==1.26.0
