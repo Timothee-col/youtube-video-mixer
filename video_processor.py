@@ -11,7 +11,7 @@ from moviepy.editor import (
 )
 from PIL import Image
 from typing import List, Dict, Optional, Tuple
-from constants import VIDEO_FORMAT, DEFAULT_SETTINGS, UI_MESSAGES
+from constants import VIDEO_FORMAT, DEFAULT_SETTINGS, UI_MESSAGES, IS_RAILWAY
 from video_analyzer import analyze_video_segments_with_face
 from face_detector import get_face_regions_for_crop
 from text_detector import detect_text_regions, remove_text_with_crop, remove_text_with_inpainting
@@ -176,7 +176,7 @@ def extract_best_clips_with_face(
     face_detection_only: bool = False,
     remove_text_method: Optional[str] = None,
     smart_crop: bool = True,
-    use_lanczos: bool = False,  # Désactivé pour économiser la mémoire sur Railway
+    use_lanczos: bool = False,  # Désactivé par défaut, surtout sur Railway
     exclude_first_seconds: float = 0,
     face_threshold: float = 0.4
 ) -> List[VideoFileClip]:
@@ -219,6 +219,14 @@ def extract_best_clips_with_face(
     )
     
     clips = []
+    
+    # OPTIMISATIONS SPÉCIFIQUES RAILWAY
+    if IS_RAILWAY:
+        # Réduire le nombre de segments à analyser sur Railway
+        max_clips_per_video = min(max_clips_per_video, 2)  # Max 2 clips par vidéo sur Railway
+        st.info(f"🚂 Mode Railway: Limitation à {max_clips_per_video} clips par vidéo")
+    else:
+        st.info(f"💻 Mode local: {max_clips_per_video} clips par vidéo maximum")
     
     for i, segment in enumerate(best_segments[:max_clips_per_video]):
         # Filtrer si nécessaire
@@ -475,13 +483,28 @@ def create_final_video(
     import gc  # Garbage collector pour libérer la mémoire
     
     try:
-        st.warning("⚠️ Mode économie mémoire activé pour Railway")
-        
-        # Limiter le nombre de clips pour éviter l'OOM
-        MAX_CLIPS_RAILWAY = 10
-        if len(clips) > MAX_CLIPS_RAILWAY:
-            st.warning(f"⚠️ Limitation à {MAX_CLIPS_RAILWAY} clips pour économiser la mémoire")
-            clips = clips[:MAX_CLIPS_RAILWAY]
+        # OPTIMISATIONS SPÉCIFIQUES RAILWAY
+        if IS_RAILWAY:
+            st.warning("🚂 Mode Railway détecté - Optimisations mémoire activées")
+            
+            # Limiter drastiquement les clips pour Railway
+            MAX_CLIPS_RAILWAY = 6  # Réduit de 10 à 6
+            if len(clips) > MAX_CLIPS_RAILWAY:
+                st.warning(f"⚠️ Limitation Railway: {MAX_CLIPS_RAILWAY} clips max pour éviter l'OOM")
+                clips = clips[:MAX_CLIPS_RAILWAY]
+            
+            # Forcer la libération mémoire sur Railway
+            import gc
+            gc.collect()
+            st.info("🧹 Nettoyage mémoire Railway effectué")
+        else:
+            st.info("💻 Mode local détecté - Traitement standard")
+            
+            # Mode local: plus de clips possibles
+            MAX_CLIPS_LOCAL = 10
+            if len(clips) > MAX_CLIPS_LOCAL:
+                st.info(f"ℹ️ Limitation locale: {MAX_CLIPS_LOCAL} clips max")
+                clips = clips[:MAX_CLIPS_LOCAL]
         
         # Mélanger les clips si demandé
         if smart_shuffle and clips_by_video and len(clips_by_video) > 1:
@@ -585,28 +608,53 @@ def create_final_video(
             
         st.info(f"✅ {len(concat_ready_clips)}/{len(optimized_clips)} clips prêts pour concaténation")
         
-        # Concaténer par petits groupes pour économiser la mémoire
-        st.info("🔗 Assemblage optimisé des clips...")
+        # STRATÉGIE DE CONCATÉNATION ADAPTATIVE
+        if IS_RAILWAY:
+            # Railway: Groupes très petits + méthode chain
+            GROUP_SIZE = 2
+            CONCAT_METHOD = "chain" 
+            st.info("🚂 Assemblage Railway (groupes de 2, méthode chain)...")
+        else:
+            # Local: Groupes plus gros + méthode compose
+            GROUP_SIZE = 5
+            CONCAT_METHOD = "compose"
+            st.info("💻 Assemblage local optimisé...")
+        
         try:
-            if len(concat_ready_clips) > 5:
-                # Traiter par groupes de 3 (plus petit pour plus de stabilité)
+            if len(concat_ready_clips) > GROUP_SIZE:
+                # Traiter par groupes adaptés à l'environnement
                 temp_videos = []
-                for i in range(0, len(concat_ready_clips), 3):
-                    group = concat_ready_clips[i:i+3]
-                    st.info(f"🔗 Concaténation groupe {i//3 + 1}: {len(group)} clips")
+                for i in range(0, len(concat_ready_clips), GROUP_SIZE):
+                    group = concat_ready_clips[i:i+GROUP_SIZE]
+                    st.info(f"🔗 Concaténation groupe {i//GROUP_SIZE + 1}: {len(group)} clips")
                     
-                    # Méthode de concaténation plus robuste
+                    if IS_RAILWAY:
+                        # Railway: Nettoyage mémoire entre chaque groupe
+                        gc.collect()
+                    
+                    # Méthode de concaténation adaptée à l'environnement
                     try:
-                        temp_video = concatenate_videoclips(group, method="chain")
+                        temp_video = concatenate_videoclips(group, method=CONCAT_METHOD)
                         temp_videos.append(temp_video)
-                        st.success(f"✅ Groupe {i//3 + 1} assemblé")
+                        st.success(f"✅ Groupe {i//GROUP_SIZE + 1} assemblé")
+                        
+                        if IS_RAILWAY:
+                            # Railway: Libération agressive de mémoire
+                            gc.collect()
+                            
                     except Exception as e:
-                        st.error(f"❌ Erreur groupe {i//3 + 1}: {str(e)}")
+                        st.error(f"❌ Erreur groupe {i//GROUP_SIZE + 1}: {str(e)}")
                         # Fallback: essayer un par un
                         for j, single_clip in enumerate(group):
                             try:
-                                temp_videos.append(single_clip)
-                                st.warning(f"⚠️ Clip {i+j+1} ajouté individuellement")
+                                if IS_RAILWAY:
+                                    # Railway: Créer un clip temporaire minimal
+                                    mini_clip = single_clip.subclip(0, min(single_clip.duration, 10))
+                                    temp_videos.append(mini_clip)
+                                    st.warning(f"🚂 Clip {i+j+1} ajouté en mode Railway (max 10s)")
+                                else:
+                                    temp_videos.append(single_clip)
+                                    st.warning(f"⚠️ Clip {i+j+1} ajouté individuellement")
                             except Exception as e2:
                                 st.error(f"❌ Impossible d'ajouter clip {i+j+1}: {str(e2)}")
                     
@@ -619,15 +667,28 @@ def create_final_video(
                 
                 # Assembler les vidéos temporaires
                 st.info(f"🔗 Assemblage final de {len(temp_videos)} groupes...")
-                final_video = concatenate_videoclips(temp_videos, method="chain")
+                
+                if IS_RAILWAY:
+                    # Railway: Méthode la plus simple
+                    final_video = concatenate_videoclips(temp_videos, method="chain")
+                    st.info("🚂 Assemblage final Railway (chain)")
+                else:
+                    # Local: Méthode optimale
+                    final_video = concatenate_videoclips(temp_videos, method="compose") 
+                    st.info("💻 Assemblage final local (compose)")
                 
                 # Libérer les vidéos temporaires
                 for temp in temp_videos:
                     if hasattr(temp, 'close'):
                         temp.close()
             else:
-                st.info("🔗 Concaténation directe des clips...")
-                final_video = concatenate_videoclips(concat_ready_clips, method="chain")
+                st.info(f"🔗 Concaténation directe de {len(concat_ready_clips)} clips...")
+                final_video = concatenate_videoclips(concat_ready_clips, method=CONCAT_METHOD)
+                
+                if IS_RAILWAY:
+                    st.info("🚂 Concaténation directe Railway")
+                else:
+                    st.info("💻 Concaténation directe locale")
                 
         except Exception as e:
             st.error(f"❌ ERREUR CONCATÉNATION: {str(e)}")
