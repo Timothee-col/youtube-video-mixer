@@ -104,19 +104,23 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
     # Configuration selon le mode de qualité
     quality_configs = {
         'ultra': {
-            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            # CORRECTION 2025: Priorité HD avec fallback progressif
+            'format': 'best[height>=1080]/best[height>=720]/best[height>=480]/best',
             'merge_output_format': 'mp4'
         },
         'high': {
-            'format': 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best',
+            # CORRECTION 2025: Forcer 720p minimum avec fallback intelligent
+            'format': 'best[height>=720]/best[height>=480]/best',
             'merge_output_format': 'mp4'
         },
         'standard': {
-            'format': 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best',
+            # 480p minimum acceptable
+            'format': 'best[height>=480]/best',
             'merge_output_format': 'mp4'
         },
         'fast': {
-            'format': 'best[height<=480][ext=mp4]/best[ext=mp4]/best',
+            # Dernier recours: n'importe quel format
+            'format': 'best/worst',
             'merge_output_format': 'mp4'
         }
     }
@@ -161,12 +165,35 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
         'sleep_interval': 1,  # Pause entre les téléchargements
         'max_sleep_interval': 3,
         'sleep_interval_requests': 0.5,  # Pause entre les requêtes
-        # Fix pour YouTube SABR streaming
-        'extractor_args': {'youtube': {'skip': ['dash', 'hls'], 'player_client': ['android']}}
+        # CORRECTION 2025: YOUTUBE PO TOKEN FIX
+        'extractor_args': {
+            'youtube': {
+                'skip': ['dash'],  # Garder HLS pour meilleure qualité
+                'player_client': ['android', 'web'],  # Essayer android puis web
+                'formats': 'missing_pot'  # IMPORTANT: Activer les formats sans PO token
+            }
+        },
+        # Force le client web si android échoue
+        'force_generic_extractor': False,
+        # Options pour contourner les restrictions YouTube
+        'geo_bypass': True,
+        'geo_bypass_country': 'US'
     }
     
-    # Fusionner avec la configuration de qualité
-    ydl_opts = {**base_opts, **quality_configs.get(quality_mode, quality_configs['high'])}
+    # NOUVEAU CODE 2025 - Fusionner avec la configuration de qualité HD FORCÉE
+    selected_quality = quality_configs.get(quality_mode, quality_configs['high'])
+    ydl_opts = {**base_opts, **selected_quality}
+    
+    # DEBUG: Confirmer que le nouveau code s'exécute
+    st.success("✅ NOUVEAU CODE 2025 ACTIVÉ - Fix PO Token déployé!")
+    st.info(f"🔧 Format HD forcé: {ydl_opts.get('format', 'ERREUR')}")
+    st.info(f"🔑 PO Token fix: {ydl_opts['extractor_args']['youtube'].get('formats', 'MANQUANT')}")
+    
+    # FORCER la qualité HD
+    if quality_mode in ['ultra', 'high']:
+        st.info(f"🎯 Mode {quality_mode}: NOUVEAU - Recherche HD avec fix PO Token")
+    else:
+        st.info(f"📹 Mode {quality_mode}: NOUVEAU - Qualité équilibrée")
     
     for idx, url in enumerate(urls):
         try:
@@ -214,16 +241,27 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
                                     st.write(f"{i}. {quality_emoji} **{f.get('format_id')}**: {f.get('width')}x{f.get('height')} - "
                                             f"{f.get('vcodec')} - {f.get('vbr', 'N/A') if f.get('vbr') else 'N/A'} kbps")
                         
-                        # Télécharger
+                        # Télécharger avec NOUVEAU CODE 2025
                         quality_messages = {
-                            'ultra': '🚀 Téléchargement en qualité ULTRA...',
-                            'high': '🎯 Téléchargement en haute qualité...',
-                            'standard': '📹 Téléchargement en qualité standard...',
-                            'fast': '⚡ Téléchargement rapide...'
+                            'ultra': '🚀 NOUVEAU 2025: Téléchargement ULTRA HD avec fix PO Token...',
+                            'high': '🎯 NOUVEAU 2025: Téléchargement HD avec fix PO Token...',
+                            'standard': '📹 NOUVEAU 2025: Téléchargement optimisé...',
+                            'fast': '⚡ NOUVEAU 2025: Téléchargement rapide...'
                         }
                         
-                        with st.spinner(quality_messages.get(quality_mode, 'Téléchargement...')):
+                        with st.spinner(quality_messages.get(quality_mode, 'Téléchargement NOUVEAU 2025...')):
                             info = ydl.extract_info(url, download=True)
+                            
+                            # Vérification qualité téléchargée
+                            if info:
+                                format_id = info.get('format_id', 'inconnu')
+                                height = info.get('height', 0)
+                                st.success(f"✅ NOUVEAU CODE: Format {format_id} sélectionné ({height}p)")
+                                if height < 480:
+                                    st.error(f"🚨 ALERTE: Toujours en basse qualité ({height}p)! Code pas déployé!")
+                                elif height >= 720:
+                                    st.success(f"🏆 SUCCÈS: Qualité HD obtenue ({height}p)!")
+                            
                             download_success = True
                             
                 except Exception as e:
