@@ -169,7 +169,7 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
         'extractor_args': {
             'youtube': {
                 'skip': ['dash'],  # Garder HLS pour meilleure qualité
-                'player_client': ['tv_embedded', 'tv', 'default'],  # CLIENT TV non affecté par SABR
+                'player_client': ['android', 'web'],  # Revenir aux clients qui marchaient
                 'formats': 'missing_pot'  # IMPORTANT: Activer les formats sans PO token
             }
         },
@@ -184,17 +184,16 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
     selected_quality = quality_configs.get(quality_mode, quality_configs['high'])
     ydl_opts = {**base_opts, **selected_quality}
     
-    # DEBUG: Confirmer le FIX OFFICIEL yt-dlp GitHub
-    st.success("✅ FIX OFFICIEL yt-dlp GitHub #12482 - CLIENT TV déployé!")
-    st.warning("📺 YouTube a CASSÉ web/android depuis février 2025 - Seul CLIENT TV marche!")
+    # DEBUG: Version restaurée qui marchait localement  
+    st.success("✅ VERSION LOCALE RESTAURÉE - Clients android/web")
     st.info(f"🔧 Format: {ydl_opts.get('format', 'ERREUR')}")
     st.info(f"🔑 Client: {ydl_opts['extractor_args']['youtube'].get('player_client', 'ERREUR')}")
     
-    # Mode avec CLIENT TV
+    # Mode avec clients Android/Web restaurés
     if quality_mode == 'ultra':
-        st.success(f"🚀 Mode ULTRA + CLIENT TV = Puissance maximale contre YouTube!")
+        st.success(f"🚀 Mode ULTRA avec clients restaurés - HD attendu!")
     else:
-        st.info(f"📺 Mode {quality_mode} avec CLIENT TV activé")
+        st.info(f"📺 Mode {quality_mode} avec clients Android/Web")
     
     for idx, url in enumerate(urls):
         try:
