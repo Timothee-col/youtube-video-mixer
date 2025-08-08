@@ -169,7 +169,7 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
         'extractor_args': {
             'youtube': {
                 'skip': ['dash'],  # Garder HLS pour meilleure qualité
-                'player_client': ['android', 'web'],  # Essayer android puis web
+                'player_client': ['tv_embedded', 'tv', 'default'],  # CLIENT TV non affecté par SABR
                 'formats': 'missing_pot'  # IMPORTANT: Activer les formats sans PO token
             }
         },
@@ -177,23 +177,24 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
         'force_generic_extractor': False,
         # Options pour contourner les restrictions YouTube
         'geo_bypass': True,
-        'geo_bypass_country': 'US'
+        'geo_bypass_country': 'DE'  # Allemagne au lieu des US
     }
     
     # NOUVEAU CODE 2025 - Fusionner avec la configuration de qualité HD FORCÉE
     selected_quality = quality_configs.get(quality_mode, quality_configs['high'])
     ydl_opts = {**base_opts, **selected_quality}
     
-    # DEBUG: Confirmer que le nouveau code s'exécute
-    st.success("✅ NOUVEAU CODE 2025 ACTIVÉ - Fix PO Token déployé!")
-    st.info(f"🔧 Format HD forcé: {ydl_opts.get('format', 'ERREUR')}")
-    st.info(f"🔑 PO Token fix: {ydl_opts['extractor_args']['youtube'].get('formats', 'MANQUANT')}")
+    # DEBUG: Confirmer le FIX OFFICIEL yt-dlp GitHub
+    st.success("✅ FIX OFFICIEL yt-dlp GitHub #12482 - CLIENT TV déployé!")
+    st.warning("📺 YouTube a CASSÉ web/android depuis février 2025 - Seul CLIENT TV marche!")
+    st.info(f"🔧 Format: {ydl_opts.get('format', 'ERREUR')}")
+    st.info(f"🔑 Client: {ydl_opts['extractor_args']['youtube'].get('player_client', 'ERREUR')}")
     
-    # FORCER la qualité HD
-    if quality_mode in ['ultra', 'high']:
-        st.info(f"🎯 Mode {quality_mode}: NOUVEAU - Recherche HD avec fix PO Token")
+    # Mode avec CLIENT TV
+    if quality_mode == 'ultra':
+        st.success(f"🚀 Mode ULTRA + CLIENT TV = Puissance maximale contre YouTube!")
     else:
-        st.info(f"📹 Mode {quality_mode}: NOUVEAU - Qualité équilibrée")
+        st.info(f"📺 Mode {quality_mode} avec CLIENT TV activé")
     
     for idx, url in enumerate(urls):
         try:
@@ -256,11 +257,18 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
                             if info:
                                 format_id = info.get('format_id', 'inconnu')
                                 height = info.get('height', 0)
-                                st.success(f"✅ NOUVEAU CODE: Format {format_id} sélectionné ({height}p)")
-                                if height < 480:
-                                    st.error(f"🚨 ALERTE: Toujours en basse qualité ({height}p)! Code pas déployé!")
-                                elif height >= 720:
-                                    st.success(f"🏆 SUCCÈS: Qualité HD obtenue ({height}p)!")
+                                if format_id == '18':
+                                    st.error(f"🚨 Format 18 MÊITE avec CLIENT TV! Vidéo VRAIMENT bloquée!")
+                                    st.warning("Cause probable: 'Playback on other websites has been disabled'")
+                                else:
+                                    st.success(f"✅ CLIENT TV RÉUSSIT: Format {format_id} ({height}p)")
+                                    
+                                if height >= 720:
+                                    st.success(f"🏆 CLIENT TV VICTOIRE! Qualité HD ({height}p)!")
+                                elif height >= 480:
+                                    st.info(f"📺 CLIENT TV: Qualité correcte ({height}p)")
+                                else:
+                                    st.warning(f"⚠️ Même CLIENT TV donne que ({height}p) - Vidéo très restreinte")
                             
                             download_success = True
                             
