@@ -161,6 +161,9 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
         'sleep_interval': 1,  # Pause entre les téléchargements
         'max_sleep_interval': 3,
         'sleep_interval_requests': 0.5,  # Pause entre les requêtes
+        # Options supplémentaires anti-bot
+        'geo_bypass': True,
+        'geo_bypass_country': 'US',
     }
     
     # Fusionner avec la configuration de qualité
