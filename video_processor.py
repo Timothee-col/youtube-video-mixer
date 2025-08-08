@@ -231,15 +231,29 @@ def extract_best_clips_with_face(
                         st.warning(f"   ⚠️ Crop intelligent désactivé: {str(e)}")
                 
                 # Convertir au format vertical
-                clip = resize_and_center_vertical(
-                    clip,
-                    remove_text_method=remove_text_method if remove_text_method else None,
-                    text_net=text_net if remove_text_method else None,
-                    face_regions=face_regions if smart_crop else None,
-                    use_lanczos=use_lanczos
-                )
-                
-                clips.append(clip)
+                try:
+                    clip = resize_and_center_vertical(
+                        clip,
+                        remove_text_method=remove_text_method if remove_text_method else None,
+                        text_net=text_net if remove_text_method else None,
+                        face_regions=face_regions if smart_crop else None,
+                        use_lanczos=use_lanczos
+                    )
+                    
+                    # Valider le clip avant de l'ajouter
+                    if clip is not None and hasattr(clip, 'duration') and clip.duration > 0:
+                        clips.append(clip)
+                    else:
+                        st.warning(f"⚠️ Clip {i+1} invalide après conversion, ignoré")
+                        if clip:
+                            clip.close()
+                except Exception as e:
+                    st.error(f"❌ Erreur conversion clip {i+1}: {str(e)}")
+                    if 'clip' in locals() and clip:
+                        try:
+                            clip.close()
+                        except:
+                            pass
                 
                 # Afficher les infos
                 face_indicator = "👤" if segment.get('has_target_face', False) else ""
@@ -422,17 +436,41 @@ def create_final_video(
             random.shuffle(clips)
             st.info("🔀 Clips mélangés aléatoirement")
         
-        # Optimiser les clips SANS réduire la qualité
-        st.info("🎯 Optimisation mémoire tout en gardant la qualité 1080p...")
-        optimized_clips = []
+        # Valider et optimiser les clips
+        st.info("🔍 Validation des clips...")
+        valid_clips = []
         for i, clip in enumerate(clips):
-            # Garder la qualité 1080p mais optimiser la mémoire
-            # Retirer les métadonnées inutiles
-            clip = clip.without_audio()  # Déjà fait mais s'assurer
-            optimized_clips.append(clip)
+            # Vérifier que le clip est valide
+            if clip is None:
+                st.warning(f"⚠️ Clip {i+1} est None, ignoré")
+                continue
             
-        # Désactiver Lanczos resize qui utilise trop de mémoire
-        st.info("💡 Désactivation du resize Lanczos pour économiser la mémoire")
+            try:
+                # Tester l'accès au clip
+                if hasattr(clip, 'duration') and clip.duration > 0:
+                    # S'assurer que le clip n'a pas d'audio (économie mémoire)
+                    if hasattr(clip, 'audio') and clip.audio is not None:
+                        clip = clip.without_audio()
+                    valid_clips.append(clip)
+                    st.success(f"✅ Clip {i+1} validé ({clip.duration:.1f}s)")
+                else:
+                    st.warning(f"⚠️ Clip {i+1} invalide (durée: {getattr(clip, 'duration', 'N/A')})")
+                    if clip:
+                        clip.close()
+            except Exception as e:
+                st.error(f"❌ Erreur validation clip {i+1}: {str(e)}")
+                if clip:
+                    try:
+                        clip.close()
+                    except:
+                        pass
+        
+        if not valid_clips:
+            st.error("❌ Aucun clip valide trouvé!")
+            return False
+            
+        st.info(f"✅ {len(valid_clips)} clips valides sur {len(clips)}")
+        optimized_clips = valid_clips
         
         # Force garbage collection
         gc.collect()
