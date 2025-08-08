@@ -290,13 +290,24 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
                         'fps': info.get('fps', 'N/A')
                     })
                     
-                    # Afficher le succès
+                    # Afficher le succès avec indicateur de qualité amélioré
                     col1, col2, col3 = st.columns(3)
                     with col1:
                         st.success(f"✅ Téléchargé: {info.get('title', 'Video')[:40]}...")
                     with col2:
-                        quality_badge = "🏆" if int(info.get('height', 0)) >= 1080 else "🥈" if int(info.get('height', 0)) >= 720 else "🥉"
-                        st.info(f"{quality_badge} {info.get('width', 'N/A')}x{info.get('height', 'N/A')}")
+                        height = int(info.get('height', 0))
+                        if height >= 1080:
+                            quality_badge = "🏆 FULL HD"
+                            st.success(f"{quality_badge} {info.get('width', 'N/A')}x{info.get('height', 'N/A')}")
+                        elif height >= 720:
+                            quality_badge = "🥈 HD"
+                            st.info(f"{quality_badge} {info.get('width', 'N/A')}x{info.get('height', 'N/A')}")
+                        elif height >= 480:
+                            quality_badge = "🥉 SD"
+                            st.warning(f"{quality_badge} {info.get('width', 'N/A')}x{info.get('height', 'N/A')}")
+                        else:
+                            quality_badge = "❌ MAUVAISE"
+                            st.error(f"{quality_badge} {info.get('width', 'N/A')}x{info.get('height', 'N/A')}")
                     with col3:
                         st.info(f"📦 {file_size_mb:.1f} MB")
                 else:

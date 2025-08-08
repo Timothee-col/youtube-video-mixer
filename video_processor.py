@@ -723,29 +723,48 @@ def create_final_video(
         if tagline_path:
             final_video = add_tagline(final_video, tagline_path)
         
-        # Sauvegarder avec optimisations pour Railway
-        st.info("🎬 Encodage de la vidéo finale... (peut prendre 2-5 minutes)")
-        
-        # Optimisations pour Railway - Balance entre qualité et mémoire
-        encoding_params = {
-            'codec': 'libx264',
-            'fps': VIDEO_FORMAT['fps'],
-            'preset': 'faster',  # Balance entre vitesse et compression
-            'threads': 4,  # Moins de threads = moins de RAM
-            'logger': 'bar',  # Afficher la progression
-            'write_logfile': False,  # Économise la mémoire
-        }
-        
-        # Réduire la qualité si la vidéo est longue (pour éviter timeout)
-        if final_video.duration > 60:
-            encoding_params['bitrate'] = '2000k'  # Qualité réduite
-            st.warning("⚠️ Qualité réduite pour optimiser le temps d'encodage")
+        # ENCODAGE ADAPTATIF LOCAL vs RAILWAY
+        if IS_RAILWAY:
+            st.info("🚂 Encodage Railway (optimisé mémoire)...")
+            encoding_params = {
+                'codec': 'libx264',
+                'fps': VIDEO_FORMAT['fps'],
+                'preset': 'ultrafast',  # Plus rapide = moins de RAM
+                'threads': 2,  # Réduit pour Railway
+                'logger': None,  # Pas de logs pour économiser RAM
+                'write_logfile': False,
+                'bitrate': '3000k',  # Compromise qualité/taille pour Railway
+            }
+            
+            # Résolution adaptée Railway
+            if final_video.duration > 30:
+                encoding_params['bitrate'] = '2000k'
+                st.warning("🚂 Vidéo longue: bitrate réduit sur Railway")
         else:
-            encoding_params['bitrate'] = VIDEO_FORMAT['bitrate']
+            st.info("💻 Encodage local (haute qualité)...")
+            encoding_params = {
+                'codec': 'libx264',
+                'fps': VIDEO_FORMAT['fps'],
+                'preset': 'medium',  # Meilleure qualité en local
+                'threads': 8,  # Plus de threads en local
+                'logger': 'bar',
+                'write_logfile': False,
+                'bitrate': VIDEO_FORMAT['bitrate'],  # Pleine qualité
+            }
+            
+            # Qualité maximale pour vidéos courtes en local
+            if final_video.duration <= 60:
+                encoding_params['preset'] = 'slow'  # Qualité maximale
+                encoding_params['bitrate'] = '8000k'  # Très haute qualité
+                st.info("🎯 Vidéo courte: qualité maximale en local")
         
         if final_video.audio is not None:
-            encoding_params['audio_codec'] = 'aac'
-            encoding_params['audio_bitrate'] = '128k'  # Audio optimisé
+            if IS_RAILWAY:
+                encoding_params['audio_codec'] = 'aac'
+                encoding_params['audio_bitrate'] = '96k'  # Audio comprimé Railway
+            else:
+                encoding_params['audio_codec'] = 'aac'
+                encoding_params['audio_bitrate'] = '192k'  # Audio HD local
         else:
             encoding_params['audio'] = False
             
