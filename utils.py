@@ -77,9 +77,84 @@ def safe_filename(filename: str) -> str:
     
     return name + ext
 
+def get_best_available_format(url: str, quality_mode: str) -> str:
+    """
+    Analyse les formats disponibles pour une vidéo et retourne le meilleur format selon le mode
+    
+    Args:
+        url: URL de la vidéo YouTube
+        quality_mode: Mode de qualité demandé
+        
+    Returns:
+        str: Format selector string optimal
+    """
+    try:
+        with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+            info = ydl.extract_info(url, download=False)
+            formats = info.get('formats', [])
+            video_formats = [f for f in formats if f.get('vcodec') != 'none' and f.get('height')]
+            
+            # Trier par qualité (hauteur puis bitrate)
+            video_formats.sort(key=lambda x: (x.get('height', 0), x.get('vbr', 0) or 0), reverse=True)
+            
+            # Analyser les formats disponibles par qualité
+            format_1080p_premium = None  # >3000 kbps
+            format_1080p_standard = None # >500 kbps  
+            format_720p_good = None      # >1000 kbps
+            format_720p_standard = None  # >300 kbps
+            
+            for f in video_formats:
+                format_id = f.get('format_id')
+                height = f.get('height', 0)
+                vbr = f.get('vbr', 0) or 0
+                
+                # Catégoriser les formats 1080p
+                if height == 1080:
+                    if vbr > 3000 and not format_1080p_premium:
+                        format_1080p_premium = format_id
+                    elif vbr > 500 and not format_1080p_standard:
+                        format_1080p_standard = format_id
+                        
+                # Catégoriser les formats 720p  
+                elif height == 720:
+                    if vbr > 1000 and not format_720p_good:
+                        format_720p_good = format_id
+                    elif vbr > 300 and not format_720p_standard:
+                        format_720p_standard = format_id
+            
+            # Construire le format selector selon le mode demandé
+            if quality_mode == 'ultra':
+                # Ultra: Priorité aux formats premium puis fallback
+                candidates = [format_1080p_premium, format_1080p_standard, format_720p_good]
+                candidates = [f for f in candidates if f]  # Filtrer les None
+                if candidates:
+                    return f"{'+140/'.join(candidates)}+140/best[height>=720]/best"
+                    
+            elif quality_mode == 'high':
+                # High: Priorité 1080p standard puis 720p bon
+                candidates = [format_1080p_standard, format_720p_good, format_720p_standard]
+                candidates = [f for f in candidates if f]
+                if candidates:
+                    return f"{'+140/'.join(candidates)}+140/best[height>=720]/best"
+                    
+            elif quality_mode == 'standard':
+                # Standard: 720p ou bon 480p
+                candidates = [format_720p_standard, format_720p_good]
+                candidates = [f for f in candidates if f]
+                if candidates:
+                    return f"{'+140/'.join(candidates)}+140/best[height>=480]/best"
+                    
+            # Fallback si aucun format spécifique trouvé
+            return 'best[height>=720]/best[height>=480]/best'
+            
+    except Exception as e:
+        st.warning(f"⚠️ Analyse des formats échouée: {str(e)[:100]}...")
+        # Fallback sur l'ancienne méthode
+        return 'best[height>=720]/best[height>=480]/best'
+
 def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str = 'high', show_formats: bool = False) -> List[Dict]:
     """
-    Télécharge des vidéos YouTube avec contrôle de qualité et gestion d'erreurs améliorée
+    Télécharge des vidéos YouTube avec détection intelligente des formats disponibles
     
     Args:
         urls: Liste des URLs YouTube
@@ -101,29 +176,8 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
     # S'assurer que le répertoire de sortie existe
     os.makedirs(output_dir, exist_ok=True)
     
-    # Configuration selon le mode de qualité
-    quality_configs = {
-        'ultra': {
-            # CORRECTION 2025: Priorité HD avec fallback progressif
-            'format': 'best[height>=1080]/best[height>=720]/best[height>=480]/best',
-            'merge_output_format': 'mp4'
-        },
-        'high': {
-            # CORRECTION 2025: Forcer 720p minimum avec fallback intelligent
-            'format': 'best[height>=720]/best[height>=480]/best',
-            'merge_output_format': 'mp4'
-        },
-        'standard': {
-            # 480p minimum acceptable
-            'format': 'best[height>=480]/best',
-            'merge_output_format': 'mp4'
-        },
-        'fast': {
-            # Dernier recours: n'importe quel format
-            'format': 'best/worst',
-            'merge_output_format': 'mp4'
-        }
-    }
+    # NOUVEAU 2025: Détection intelligente des formats pour chaque URL
+    st.info(f"🔍 Mode {quality_mode}: Analyse intelligente des formats disponibles...")
     
     # Options de base avec corrections ANTI-BOT
     base_opts = {
@@ -180,20 +234,23 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
         'geo_bypass_country': 'DE'  # Allemagne au lieu des US
     }
     
-    # NOUVEAU CODE 2025 - Fusionner avec la configuration de qualité HD FORCÉE
-    selected_quality = quality_configs.get(quality_mode, quality_configs['high'])
-    ydl_opts = {**base_opts, **selected_quality}
+    # Configuration de base pour tous les téléchargements
+    base_download_opts = {
+        'merge_output_format': 'mp4',
+        # Le format sera défini dynamiquement par URL
+    }
     
-    # DEBUG: Version restaurée qui marchait localement  
-    st.success("✅ VERSION LOCALE RESTAURÉE - Clients android/web")
-    st.info(f"🔧 Format: {ydl_opts.get('format', 'ERREUR')}")
-    st.info(f"🔑 Client: {ydl_opts['extractor_args']['youtube'].get('player_client', 'ERREUR')}")
+    # DEBUG: Nouvelle version intelligente 2025
+    st.success("✅ DÉTECTION INTELLIGENTE 2025 - Analyse des formats par vidéo")
+    st.info(f"🔑 Client: {base_opts['extractor_args']['youtube'].get('player_client', 'ERREUR')}")
     
-    # Mode avec clients Android/Web restaurés
+    # Mode avec détection intelligente
     if quality_mode == 'ultra':
-        st.success(f"🚀 Mode ULTRA avec clients restaurés - HD attendu!")
+        st.success(f"🚀 Mode ULTRA: Recherche formats premium (>3000 kbps)")
+    elif quality_mode == 'high':
+        st.info(f"📹 Mode HIGH: Recherche 1080p standard puis 720p")
     else:
-        st.info(f"📺 Mode {quality_mode} avec clients Android/Web")
+        st.info(f"📺 Mode {quality_mode}: Optimisé pour la compatibilité")
     
     for idx, url in enumerate(urls):
         try:
@@ -208,7 +265,12 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
             
             st.info(f"🎥 Téléchargement vidéo {idx+1}/{len(urls)}: {url}")
             
-            # Première tentative avec options normales
+            # ÉTAPE 1: Analyser les formats disponibles pour cette vidéo spécifique
+            with st.spinner(f"🔍 Analyse des formats pour vidéo {idx+1}..."):
+                optimal_format = get_best_available_format(url, quality_mode)
+                st.info(f"🎯 Format optimal détecté: {optimal_format}")
+            
+            # ÉTAPE 2: Télécharger avec le format optimal
             download_success = False
             attempts = 0
             max_attempts = 3
@@ -217,6 +279,9 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
                 attempts += 1
                 
                 try:
+                    # Créer les options avec le format optimal détecté
+                    ydl_opts = {**base_opts, **base_download_opts, 'format': optimal_format}
+                    
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         if attempts > 1:
                             st.info(f"⏳ Tentative {attempts}/{max_attempts}...")
@@ -241,33 +306,40 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
                                     st.write(f"{i}. {quality_emoji} **{f.get('format_id')}**: {f.get('width')}x{f.get('height')} - "
                                             f"{f.get('vcodec')} - {f.get('vbr', 'N/A') if f.get('vbr') else 'N/A'} kbps")
                         
-                        # Télécharger avec NOUVEAU CODE 2025
+                        # Télécharger avec DÉTECTION INTELLIGENTE 2025
                         quality_messages = {
-                            'ultra': '🚀 NOUVEAU 2025: Téléchargement ULTRA HD avec fix PO Token...',
-                            'high': '🎯 NOUVEAU 2025: Téléchargement HD avec fix PO Token...',
-                            'standard': '📹 NOUVEAU 2025: Téléchargement optimisé...',
-                            'fast': '⚡ NOUVEAU 2025: Téléchargement rapide...'
+                            'ultra': f'🚀 INTELLIGENT 2025: Téléchargement format premium...',
+                            'high': f'🎯 INTELLIGENT 2025: Téléchargement format optimal...',
+                            'standard': f'📹 INTELLIGENT 2025: Téléchargement adaptatif...',
+                            'fast': f'⚡ INTELLIGENT 2025: Téléchargement rapide...'
                         }
                         
-                        with st.spinner(quality_messages.get(quality_mode, 'Téléchargement NOUVEAU 2025...')):
+                        with st.spinner(quality_messages.get(quality_mode, f'🤖 Format {optimal_format[:20]}...')):
                             info = ydl.extract_info(url, download=True)
                             
                             # Vérification qualité téléchargée
                             if info:
                                 format_id = info.get('format_id', 'inconnu')
                                 height = info.get('height', 0)
+                                vbr = info.get('vbr', 0) or 0
+                                
                                 if format_id == '18':
-                                    st.error(f"🚨 Format 18 MÊITE avec CLIENT TV! Vidéo VRAIMENT bloquée!")
-                                    st.warning("Cause probable: 'Playback on other websites has been disabled'")
+                                    st.error(f"🚨 Format 18 malgré détection intelligente! Vidéo très restreinte!")
+                                    st.warning("YouTube bloque complètement cette vidéo")
                                 else:
-                                    st.success(f"✅ CLIENT TV RÉUSSIT: Format {format_id} ({height}p)")
+                                    st.success(f"✅ DÉTECTION RÉUSSIE: Format {format_id} ({height}p, {vbr} kbps)")
                                     
-                                if height >= 720:
-                                    st.success(f"🏆 CLIENT TV VICTOIRE! Qualité HD ({height}p)!")
+                                # Évaluation de la qualité obtenue
+                                if height >= 1080 and vbr > 3000:
+                                    st.success(f"🏆 PREMIUM HD OBTENU! {height}p à {vbr} kbps")
+                                elif height >= 1080:
+                                    st.success(f"🥇 FULL HD OBTENU! {height}p à {vbr} kbps") 
+                                elif height >= 720:
+                                    st.info(f"🥈 HD OBTENU! {height}p à {vbr} kbps")
                                 elif height >= 480:
-                                    st.info(f"📺 CLIENT TV: Qualité correcte ({height}p)")
+                                    st.warning(f"🥉 SD obtenu: {height}p à {vbr} kbps")
                                 else:
-                                    st.warning(f"⚠️ Même CLIENT TV donne que ({height}p) - Vidéo très restreinte")
+                                    st.error(f"❌ Qualité faible: {height}p à {vbr} kbps")
                             
                             download_success = True
                             
