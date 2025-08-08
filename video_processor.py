@@ -387,7 +387,7 @@ def create_final_video(
     output_duration: Optional[float] = None
 ) -> bool:
     """
-    Crée la vidéo finale à partir des clips
+    Crée la vidéo finale à partir des clips (optimisé pour Railway)
     
     Args:
         clips: Liste des clips
@@ -403,7 +403,17 @@ def create_final_video(
     Returns:
         bool: True si succès
     """
+    import gc  # Garbage collector pour libérer la mémoire
+    
     try:
+        st.warning("⚠️ Mode économie mémoire activé pour Railway")
+        
+        # Limiter le nombre de clips pour éviter l'OOM
+        MAX_CLIPS_RAILWAY = 10
+        if len(clips) > MAX_CLIPS_RAILWAY:
+            st.warning(f"⚠️ Limitation à {MAX_CLIPS_RAILWAY} clips pour économiser la mémoire")
+            clips = clips[:MAX_CLIPS_RAILWAY]
+        
         # Mélanger les clips si demandé
         if smart_shuffle and clips_by_video and len(clips_by_video) > 1:
             clips = smart_shuffle_clips(clips_by_video)
@@ -412,8 +422,45 @@ def create_final_video(
             random.shuffle(clips)
             st.info("🔀 Clips mélangés aléatoirement")
         
-        # Concaténer
-        final_video = concatenate_videoclips(clips, method="compose")
+        # Réduire la résolution des clips pour économiser la mémoire
+        st.info("📐 Optimisation de la résolution pour Railway...")
+        optimized_clips = []
+        for i, clip in enumerate(clips):
+            # Réduire à 720p max pour Railway
+            if clip.h > 720:
+                scale_factor = 720 / clip.h
+                new_size = (int(clip.w * scale_factor), 720)
+                clip = clip.resize(new_size)
+                st.info(f"↘️ Clip {i+1} réduit à 720p")
+            optimized_clips.append(clip)
+            # Libérer le clip original
+            if clip != optimized_clips[-1]:
+                clip.close()
+        
+        # Force garbage collection
+        gc.collect()
+        
+        # Concaténer par petits groupes pour économiser la mémoire
+        st.info("🔗 Assemblage optimisé des clips...")
+        if len(optimized_clips) > 5:
+            # Traiter par groupes de 5
+            temp_videos = []
+            for i in range(0, len(optimized_clips), 5):
+                group = optimized_clips[i:i+5]
+                temp_video = concatenate_videoclips(group, method="compose")
+                temp_videos.append(temp_video)
+                # Libérer les clips du groupe
+                for clip in group:
+                    clip.close()
+                gc.collect()
+            
+            # Assembler les vidéos temporaires
+            final_video = concatenate_videoclips(temp_videos, method="compose")
+            # Libérer les vidéos temporaires
+            for temp in temp_videos:
+                temp.close()
+        else:
+            final_video = concatenate_videoclips(optimized_clips, method="compose")
         
         # Ajuster la durée si nécessaire
         if output_duration and not (audio_config and audio_config.get('adapt_to_audio')):
