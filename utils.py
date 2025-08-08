@@ -88,8 +88,31 @@ def get_best_available_format(url: str, quality_mode: str) -> str:
     Returns:
         str: Format selector string intelligent basé sur les caractéristiques
     """
+    # Configuration style "YouTube to MP4" - priorité aux clients mobiles
+    ydl_opts = {
+        'quiet': True,
+        'extract_flat': False,
+        'force_generic_extractor': False,
+        # Stratégie mobile-first comme les sites de téléchargement
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['ios', 'mweb', 'android'],  # iOS en premier !
+                'skip': ['hls', 'dash'],  # Formats directs seulement
+                'player_skip': ['webpage', 'configs'],  # Skip les checks inutiles
+            }
+        },
+        # Headers mobiles pour éviter la détection
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+        }
+    }
+    
     try:
-        with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             formats = info.get('formats', [])
             video_formats = [f for f in formats if f.get('vcodec') != 'none' and f.get('height')]
@@ -101,18 +124,27 @@ def get_best_available_format(url: str, quality_mode: str) -> str:
             has_720p = any(f.get('height') == 720 for f in video_formats)
             has_480p = any(f.get('height') == 480 for f in video_formats)
             
-            # Construire le sélecteur intelligent selon ce qui existe
+            # STRATÉGIE YOUTUBE-TO-MP4: Privilégier les formats directs MP4
+            # Chercher d'abord les formats MP4 complets (video+audio)
+            mp4_formats_1080p = [f for f in video_formats if f.get('ext') == 'mp4' and f.get('height') == 1080 and f.get('acodec') != 'none']
+            mp4_formats_720p = [f for f in video_formats if f.get('ext') == 'mp4' and f.get('height') == 720 and f.get('acodec') != 'none']
+            
             if quality_mode == 'ultra':
-                # Ultra: Chercher le meilleur disponible par caractéristiques
                 selectors = []
+                # Priorité aux MP4 directs (comme les sites de téléchargement)
+                if mp4_formats_1080p:
+                    best_mp4 = max(mp4_formats_1080p, key=lambda x: x.get('vbr', 0) or 0)
+                    selectors.append(str(best_mp4.get('format_id')))
+                if mp4_formats_720p:
+                    best_720_mp4 = max(mp4_formats_720p, key=lambda x: x.get('vbr', 0) or 0) 
+                    selectors.append(str(best_720_mp4.get('format_id')))
+                # Puis les formats séparés si nécessaire
                 if has_1080p_premium:
-                    selectors.append('bestvideo[height=1080][vbr>3000]+bestaudio')
+                    selectors.append('bestvideo[height=1080][vbr>3000]+bestaudio/best')
                 if has_1080p_standard:
-                    selectors.append('bestvideo[height=1080][vbr>500]+bestaudio') 
-                if has_720p_good:
-                    selectors.append('bestvideo[height=720][vbr>1000]+bestaudio')
-                # Fallback
-                selectors.append('bestvideo[height>=720]+bestaudio')
+                    selectors.append('bestvideo[height=1080]+bestaudio/best')
+                # Fallback génériques
+                selectors.append('best[height>=720][ext=mp4]')
                 selectors.append('best[height>=720]')
                 selectors.append('best')
                 return '/'.join(selectors)
@@ -120,11 +152,17 @@ def get_best_available_format(url: str, quality_mode: str) -> str:
             elif quality_mode == 'high':
                 # High: Équilibré entre qualité et compatibilité
                 selectors = []
+                # Priorité aux MP4 directs (comme les sites de téléchargement)
+                if mp4_formats_1080p:
+                    selectors.append(str(mp4_formats_1080p[0].get('format_id')))
+                if mp4_formats_720p:
+                    selectors.append(str(mp4_formats_720p[0].get('format_id')))
+                # Puis les formats séparés si nécessaire
                 if has_1080p_standard:
                     selectors.append('bestvideo[height=1080]+bestaudio')
                 if has_720p:
                     selectors.append('bestvideo[height=720]+bestaudio')
-                selectors.append('bestvideo[height>=720]+bestaudio')
+                selectors.append('best[height>=720][ext=mp4]')
                 selectors.append('best[height>=720]') 
                 selectors.append('best')
                 return '/'.join(selectors)
@@ -132,18 +170,25 @@ def get_best_available_format(url: str, quality_mode: str) -> str:
             elif quality_mode == 'standard':
                 # Standard: Compatible et fiable
                 selectors = []
+                # Chercher les MP4 directs en 720p et 480p
+                mp4_formats_480p = [f for f in video_formats if f.get('ext') == 'mp4' and f.get('height') == 480 and f.get('acodec') != 'none']
+                if mp4_formats_720p:
+                    selectors.append(str(mp4_formats_720p[0].get('format_id')))
+                if mp4_formats_480p:
+                    selectors.append(str(mp4_formats_480p[0].get('format_id')))
+                # Puis les formats séparés
                 if has_720p:
                     selectors.append('bestvideo[height=720]+bestaudio')
                 if has_480p:
                     selectors.append('bestvideo[height=480]+bestaudio')
-                selectors.append('bestvideo[height>=480]+bestaudio')
+                selectors.append('best[height>=480][ext=mp4]')
                 selectors.append('best[height>=480]')
                 selectors.append('best')
                 return '/'.join(selectors)
                 
             else:  # fast
-                # Fast: Prendre ce qui marche
-                return 'best/bestvideo+bestaudio'
+                # Fast: Prendre ce qui marche, privilégier MP4
+                return 'best[ext=mp4]/best/bestvideo+bestaudio'
             
     except Exception as e:
         st.warning(f"⚠️ Analyse des formats échouée: {str(e)[:100]}...")
@@ -184,13 +229,29 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
     # NOUVEAU 2025: Détection intelligente des formats pour chaque URL
     st.info(f"🔍 Mode {quality_mode}: Analyse intelligente des formats disponibles...")
     
-    # Options de base avec corrections ANTI-BOT
+    # STRATÉGIE "YOUTUBE TO MP4" - Options optimisées comme les sites de téléchargement
+    mobile_headers = {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Cache-Control': 'max-age=0',
+    }
+    
     base_opts = {
-        'quiet': False,  # Activer les logs pour debug
+        'quiet': False,
         'no_warnings': False,
         'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
-        'restrictfilenames': True,  # Éviter les caractères problématiques
-        'windowsfilenames': True,   # Compatible avec tous les OS
+        'restrictfilenames': True,
+        'windowsfilenames': True,
+        # Post-processing minimal pour vitesse
         'postprocessors': [{
             'key': 'FFmpegVideoConvertor',
             'preferedformat': 'mp4',
@@ -198,46 +259,37 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
         'keepvideo': False,
         'overwrites': True,
         'nocheckcertificate': True,
-        # 'no_color': True,  # Commenté car conflit avec color
-        'concurrent_fragment_downloads': 1,
-        'http_chunk_size': 10485760,  # 10MB chunks
-        'retries': 3,
-        'fragment_retries': 3,
+        # Options de téléchargement optimisées
+        'concurrent_fragment_downloads': 4,  # Plus de parallélisme
+        'http_chunk_size': 10485760,
+        'retries': 5,  # Plus de tentatives
+        'fragment_retries': 5,
         'skip_unavailable_fragments': True,
         'ignoreerrors': False,
         'fixup': 'detect_or_warn',
         'prefer_ffmpeg': True,
         'extract_flat': False,
         'socket_timeout': 30,
-        'extractor_retries': 3,
-        # ===== OPTIONS ANTI-BOT =====
-        # User-Agent plus récent et varié
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        'referer': 'https://www.youtube.com/',
-        'http_headers': {
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-us,en;q=0.5',
-            'Accept-Encoding': 'gzip,deflate',
-            'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-        },
-        'sleep_interval': 0.5,  # Réduit pour éviter trop de délais
-        'max_sleep_interval': 1,
-        'sleep_interval_requests': 0.25,  # Pause courte entre requêtes
-        # CORRECTION 2025: YOUTUBE PO TOKEN FIX
+        'extractor_retries': 5,
+        # Headers mobiles
+        'http_headers': mobile_headers,
+        # Pas de délais (comme les sites rapides)
+        'sleep_interval': 0,
+        'max_sleep_interval': 0,
+        'sleep_interval_requests': 0,
+        # STRATÉGIE MOBILE-FIRST
         'extractor_args': {
             'youtube': {
-                'skip': ['dash'],  # Garder HLS pour meilleure qualité
-                'player_client': ['android', 'web'],  # Revenir aux clients qui marchaient
-                'formats': 'missing_pot'  # IMPORTANT: Activer les formats sans PO token
+                'player_client': ['ios', 'mweb', 'android', 'tv_embedded'],  # iOS prioritaire
+                'skip': ['hls', 'dash'] if quality_mode != 'ultra' else ['dash'],  # Direct MP4
+                'player_skip': ['webpage', 'js'],  # Skip inutile
+                'formats': 'incomplete',  # Accepter formats incomplets
             }
         },
-        # Force le client web si android échoue
-        'force_generic_extractor': False,
-        # Options pour contourner les restrictions YouTube
+        # Bypass geo et age
         'geo_bypass': True,
-        'geo_bypass_country': 'FR'  # France comme ton IP locale
+        'geo_bypass_country': 'US',
+        'age_limit': None,
     }
     
     # Configuration de base pour tous les téléchargements
@@ -246,16 +298,19 @@ def download_youtube_videos(urls: List[str], output_dir: str, quality_mode: str 
         # Le format sera défini dynamiquement par URL
     }
     
-    # DEBUG: Nouvelle version intelligente 2025
+    # DEBUG: Stratégie YouTube to MP4 2025
     if IS_RAILWAY:
-        st.warning("🚂 Environnement Railway détecté - Restrictions YouTube possibles")
-        # Ajouter des options spécifiques pour Railway
-        base_opts['extractor_args']['youtube']['player_client'] = ['tv_embedded', 'mweb', 'android']
-        base_opts['geo_bypass_country'] = 'US'  # US souvent moins restrictif pour serveurs
+        st.warning("🚂 Railway détecté - Mode bypass activé")
+        # Simuler une requête depuis un embedder populaire
+        base_opts['http_headers']['Referer'] = 'https://www.y2mate.com/'
+        base_opts['http_headers']['Origin'] = 'https://www.y2mate.com'
+        # Forcer le client embedder
+        base_opts['extractor_args']['youtube']['player_client'].insert(0, 'web_embedded')
     
-    st.success("✅ DÉTECTION INTELLIGENTE 2025 - Analyse des formats par vidéo")
-    st.info(f"🔑 Client: {base_opts['extractor_args']['youtube'].get('player_client', 'ERREUR')}")
-    st.info(f"🌍 Environnement: {'Railway' if IS_RAILWAY else 'Local'}")
+    st.success("✅ STRATÉGIE YOUTUBE-TO-MP4 2025 - Bypass comme les pros")
+    st.info(f"📱 Clients: {base_opts['extractor_args']['youtube'].get('player_client', 'ERREUR')}")
+    st.info(f"🌍 Mode: {'Railway Bypass' if IS_RAILWAY else 'Local Direct'}")
+    st.info(f"🎯 Headers: Mobile iOS 17")
     
     # Mode avec détection intelligente
     if quality_mode == 'ultra':
