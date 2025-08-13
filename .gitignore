@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+build/
+dist/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+old_versions/
+
+# Media files (for privacy)
+*.mp4
+*.mov
+*.avi
+*.webm
+*.mkv
+*.mp3
+*.wav
+*.m4a
+
+# Model files
+*.pb
+*.h5
+*.pth
+
+# Logs
+*.log
+logs/
+
+# Environment variables
+.env
+.env.local
+
+# Streamlit
+.streamlit/secrets.toml
