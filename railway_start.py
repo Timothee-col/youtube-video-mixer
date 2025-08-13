@@ -11,7 +11,19 @@ def main():
     port = os.environ.get('PORT', '8501')
     
     print(f"🚀 Démarrage Railway sur le port: {port}")
-    print(f"🌐 URL attendue: https://votre-app.railway.app")
+    print(f"🌐 Variables d'environnement PORT: {port}")
+    
+    # IMPORTANT: Supprimer les variables Streamlit conflictuelles
+    env = os.environ.copy()
+    # Supprimer toutes les variables STREAMLIT_* qui pourraient causer des conflits
+    for key in list(env.keys()):
+        if key.startswith('STREAMLIT_'):
+            print(f"🗑️ Suppression variable conflictuelle: {key}={env[key]}")
+            del env[key]
+    
+    # Ajouter seulement les variables nécessaires
+    env['STREAMLIT_SERVER_HEADLESS'] = 'true'
+    env['STREAMLIT_BROWSER_GATHER_USAGE_STATS'] = 'false'
     
     # Commande Streamlit avec le port correct
     cmd = [
@@ -23,10 +35,11 @@ def main():
     ]
     
     print(f"📡 Commande: {' '.join(cmd)}")
+    print(f"🔧 Port utilisé: {port}")
     
-    # Lancer Streamlit
+    # Lancer Streamlit avec l'environnement nettoyé
     try:
-        subprocess.run(cmd, check=True)
+        subprocess.run(cmd, env=env, check=True)
     except subprocess.CalledProcessError as e:
         print(f"❌ Erreur lors du lancement: {e}")
         sys.exit(1)
