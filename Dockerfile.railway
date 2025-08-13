@@ -1,0 +1,22 @@
+# Dockerfile FINAL pour Railway - Version testée et fonctionnelle
+FROM python:3.11-slim
+
+# Installer ffmpeg
+RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+
+# Répertoire de travail
+WORKDIR /app
+
+# Copier et installer les dépendances
+COPY requirements-simple.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copier l'application
+COPY . .
+
+# Script de démarrage inline
+RUN echo '#!/bin/sh\nexec streamlit run upload_video_mixer.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true' > /app/start.sh && \
+    chmod +x /app/start.sh
+
+# Démarrer avec sh pour interpréter les variables
+ENTRYPOINT ["/bin/sh", "/app/start.sh"]
