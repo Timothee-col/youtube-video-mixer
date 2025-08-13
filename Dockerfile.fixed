@@ -1,7 +1,7 @@
-# Dockerfile simple pour Railway (sans reconnaissance faciale)
+# Dockerfile pour Railway avec gestion du port dynamique
 FROM python:3.11-slim
 
-# Installer uniquement ffmpeg pour le traitement vidéo
+# Installer ffmpeg pour le traitement vidéo
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
 # Créer le répertoire de travail
 WORKDIR /app
 
-# Copier les requirements allégés
+# Copier les requirements
 COPY requirements-simple.txt requirements.txt
 
 # Installer les dépendances
@@ -24,9 +24,5 @@ ENV IS_RAILWAY=true
 ENV PYTHONUNBUFFERED=1
 ENV NO_FACE_RECOGNITION=true
 
-# Script de démarrage qui gère le port dynamique
-RUN echo '#!/bin/bash\nstreamlit run upload_video_mixer.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true' > start.sh && \
-    chmod +x start.sh
-
-# Utiliser le script de démarrage
-CMD ["/bin/bash", "start.sh"]
+# Utiliser le script Python pour démarrer
+CMD ["python", "start_railway.py"]
