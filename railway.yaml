@@ -1,0 +1,14 @@
+# Configuration Railway
+build:
+  dockerfilePath: ./Dockerfile
+
+deploy:
+  numReplicas: 1
+  startCommand: streamlit run upload_video_mixer.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true
+  healthcheckPath: /
+  restartPolicyType: ON_FAILURE
+  restartPolicyMaxRetries: 3
+
+variables:
+  IS_RAILWAY: true
+  PYTHONUNBUFFERED: 1

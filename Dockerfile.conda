@@ -1,0 +1,41 @@
+# Dockerfile avec Miniconda pour Railway (alternative plus fiable)
+FROM continuumio/miniconda3:latest
+
+# Installer les dépendances système
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    ffmpeg \
+    libgtk-3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Créer l'environnement conda avec dlib pré-compilé
+RUN conda install -c conda-forge -y \
+    python=3.11 \
+    dlib \
+    cmake \
+    && conda clean -afy
+
+# Installer pip dans l'environnement conda
+RUN conda install -y pip
+
+# Créer le répertoire de travail
+WORKDIR /app
+
+# Copier les requirements
+COPY requirements-conda.txt .
+
+# Installer les dépendances Python
+RUN pip install --no-cache-dir -r requirements-conda.txt
+
+# Copier l'application
+COPY . .
+
+# Variables d'environnement
+ENV IS_RAILWAY=true
+ENV PYTHONUNBUFFERED=1
+
+# Exposer le port
+EXPOSE 8501
+
+# Commande de démarrage
+CMD ["streamlit", "run", "upload_video_mixer.py", "--server.port=${PORT:-8501}", "--server.address=0.0.0.0", "--server.headless=true"]
