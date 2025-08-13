@@ -317,12 +317,6 @@ def create_final_video_ultra_safe(
         
         st.info(f"📊 {len(clips)} clips à assembler")
         
-        # Limitation pour la stabilité
-        MAX_CLIPS = 8 if not IS_RAILWAY else 4
-        if len(clips) > MAX_CLIPS:
-            st.warning(f"⚠️ Limitation à {MAX_CLIPS} clips pour la stabilité")
-            clips = clips[:MAX_CLIPS]
-        
         # Mélanger si demandé
         if smart_shuffle and clips_by_video and len(clips_by_video) > 1:
             # Utiliser la fonction smart_shuffle_clips définie localement

@@ -1,22 +1,28 @@
-# Dockerfile pour Railway - Version Python
+# Dockerfile simple pour Railway (sans reconnaissance faciale)
 FROM python:3.11-slim
 
-# Installer ffmpeg
-RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+# Installer uniquement ffmpeg pour le traitement vidéo
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
-# Répertoire de travail
+# Créer le répertoire de travail
 WORKDIR /app
 
-# Copier et installer les dépendances
-COPY requirements-simple.txt requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Copier les requirements
+COPY requirements.txt .
+
+# Installer les dépendances
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copier l'application
 COPY . .
 
 # Variables d'environnement
-ENV PYTHONUNBUFFERED=1
 ENV IS_RAILWAY=true
+ENV PYTHONUNBUFFERED=1
+ENV NO_FACE_RECOGNITION=true
 
-# Utiliser le script Python qui gère correctement le port
-CMD ["python", "run.py"]
+# Utiliser le script Python pour démarrer
+CMD ["python3", "railway_start.py"]

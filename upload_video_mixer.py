@@ -45,12 +45,12 @@ col1, col2 = st.columns(2)
 with col1:
     output_duration = st.slider(
         "Durée totale de sortie (secondes):", 
-        15, 120, DEFAULT_SETTINGS['output_duration'],
+        15, 600, DEFAULT_SETTINGS['output_duration'],
         help="Cette durée sera ignorée si 'Adapter la durée à l'audio' est activé"
     )
     max_clips_per_video = st.slider(
         "Nombre max de clips par vidéo:", 
-        1, 10, DEFAULT_SETTINGS['max_clips_per_video'],
+        1, 50, DEFAULT_SETTINGS['max_clips_per_video'],
         help="Augmentez pour plus de variété"
     )
     
@@ -61,7 +61,7 @@ with col2:
     )
     max_clip_duration = st.slider(
         "Durée max d'un clip (secondes):", 
-        5, 15, DEFAULT_SETTINGS['max_clip_duration']
+        5, 30, DEFAULT_SETTINGS['max_clip_duration']
     )
 
 # Section 2: Reconnaissance faciale
@@ -319,13 +319,6 @@ if st.button("🎬 Créer la vidéo TikTok/Reels", type="primary"):
             processed_files = process_uploaded_videos(valid_videos, st.session_state.temp_dir)
         
         if processed_files:
-            # LIMITATION POUR ÉVITER LES PROBLÈMES MÉMOIRE
-            MAX_VIDEOS = 3  # Limiter à 3 vidéos max pour stabilité
-            if len(processed_files) > MAX_VIDEOS:
-                st.warning(f"⚠️ Limitation: Traitement des {MAX_VIDEOS} premières vidéos pour éviter les problèmes mémoire")
-                st.info(f"💡 Conseil: Traitez vos vidéos par lots de {MAX_VIDEOS} maximum")
-                processed_files = processed_files[:MAX_VIDEOS]
-            
             # Résumé global du traitement
             st.markdown("### 📊 Résumé du traitement")
             col1, col2, col3 = st.columns(3)
@@ -361,12 +354,6 @@ if st.button("🎬 Créer la vidéo TikTok/Reels", type="primary"):
             
             for idx, video_info in enumerate(processed_files):
                 st.write(f"**Analyse de:** {video_info['title']} ({idx+1}/{len(processed_files)})")
-                
-                # LIMITATION POUR ÉVITER LES PROBLÈMES MÉMOIRE
-                MAX_VIDEOS = 3  # Limiter à 3 vidéos max pour stabilité
-                if idx >= MAX_VIDEOS:
-                    st.warning(f"⚠️ Limitation: Traitement des {MAX_VIDEOS} premières vidéos pour éviter les problèmes mémoire")
-                    break
                 
                 # GESTION MÉMOIRE: Traiter une vidéo à la fois
                 try:

@@ -1,171 +1,251 @@
 """
-Module de détection faciale avec fallback si face_recognition n'est pas disponible
+Module de détection et reconnaissance faciale
 """
-import cv2
-import numpy as np
 import streamlit as st
-from typing import Optional, List, Dict, Tuple
+import numpy as np
+from typing import List, Dict, Optional, Tuple
 
-# Tentative d'import de face_recognition
+# Import conditionnel de cv2
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+    cv2 = None
+    st.warning("⚠️ OpenCV non disponible")
+
+# Import conditionnel de face_recognition
 try:
     import face_recognition
     FACE_RECOGNITION_AVAILABLE = True
-    st.info("✅ Module face_recognition disponible")
 except ImportError:
     FACE_RECOGNITION_AVAILABLE = False
-    st.warning("⚠️ Module face_recognition non disponible - fonctionnement en mode basique")
+    face_recognition = None
+    st.warning("⚠️ face_recognition non disponible")
+
+from constants import DETECTION_PARAMS
 
 def extract_face_encoding_from_image(image_path: str) -> Optional[np.ndarray]:
     """
     Extrait l'encoding facial d'une image de référence
     
     Args:
-        image_path: Chemin vers l'image
-        
+        image_path: Chemin de l'image
+    
     Returns:
-        Encoding facial ou None si pas de visage détecté
+        np.ndarray: Encoding facial ou None si pas de visage
     """
     if not FACE_RECOGNITION_AVAILABLE:
-        st.warning("⚠️ Reconnaissance faciale désactivée (face_recognition non installé)")
         return None
-    
+        
     try:
-        # Charger l'image
         image = face_recognition.load_image_file(image_path)
+        face_locations = face_recognition.face_locations(image)
         
-        # Extraire les encodings
-        face_encodings = face_recognition.face_encodings(image)
-        
-        if face_encodings:
-            st.success(f"✅ Visage détecté et encodé")
-            return face_encodings[0]
-        else:
-            st.warning("⚠️ Aucun visage détecté dans l'image de référence")
+        if not face_locations:
             return None
-            
+        
+        # Si plusieurs visages, prendre le plus grand
+        if len(face_locations) > 1:
+            largest_face = max(face_locations, key=lambda loc: (loc[2]-loc[0]) * (loc[1]-loc[3]))
+            face_locations = [largest_face]
+        
+        encodings = face_recognition.face_encodings(image, face_locations)
+        if encodings:
+            return encodings[0]
+        return None
     except Exception as e:
-        st.error(f"❌ Erreur lors de l'extraction du visage: {str(e)}")
+        st.error(f"Erreur lors du chargement de l'image de référence: {str(e)}")
         return None
 
-def detect_faces_in_frame(frame: np.ndarray, target_encoding: Optional[np.ndarray] = None, threshold: float = 0.6) -> Tuple[bool, List[Dict]]:
+def detect_faces_in_frame(frame: np.ndarray, target_encoding: Optional[np.ndarray] = None, 
+                         model: str = "hog", upsample: int = 1,
+                         similarity_threshold: float = 0.4) -> List[Dict]:
     """
     Détecte les visages dans une frame
     
     Args:
         frame: Frame à analyser
         target_encoding: Encoding du visage cible (optionnel)
-        threshold: Seuil de similarité
-        
+        model: Modèle de détection ("hog" ou "cnn")
+        upsample: Nombre d'upsampling
+        similarity_threshold: Seuil de similarité
+    
     Returns:
-        (has_target_face, face_locations)
+        List[Dict]: Liste des visages détectés avec leurs scores
     """
-    if not FACE_RECOGNITION_AVAILABLE:
-        # Fallback avec OpenCV Haar Cascades
-        return detect_faces_opencv(frame)
+    faces_data = []
+    
+    if not FACE_RECOGNITION_AVAILABLE or not CV2_AVAILABLE:
+        # Fallback avec Haar Cascade
+        return detect_faces_haar_cascade(frame)
     
     try:
-        # Redimensionner pour accélérer
-        small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
-        rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+        # Convertir BGR en RGB pour face_recognition
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
         # Détecter les visages
-        face_locations = face_recognition.face_locations(rgb_small_frame, model="hog")
+        face_locations = face_recognition.face_locations(
+            rgb_frame, 
+            model=model, 
+            number_of_times_to_upsample=upsample
+        )
         
         if not face_locations:
-            return False, []
+            return faces_data
         
-        # Si pas de cible, retourner juste la présence de visages
-        if target_encoding is None:
-            face_dicts = []
-            for (top, right, bottom, left) in face_locations:
-                face_dicts.append({
-                    'x': left * 4,
-                    'y': top * 4,
-                    'width': (right - left) * 4,
-                    'height': (bottom - top) * 4
-                })
-            return True, face_dicts
+        # Obtenir les encodings
+        face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
         
-        # Comparer avec la cible
-        face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
+        frame_height, frame_width = frame.shape[:2]
         
-        has_target = False
-        face_dicts = []
-        
-        for encoding, (top, right, bottom, left) in zip(face_encodings, face_locations):
-            # Calculer la distance
-            distance = face_recognition.face_distance([target_encoding], encoding)[0]
+        for face_location, encoding in zip(face_locations, face_encodings):
+            top, right, bottom, left = face_location
             
-            face_dict = {
-                'x': left * 4,
-                'y': top * 4,
-                'width': (right - left) * 4,
-                'height': (bottom - top) * 4,
-                'distance': distance
+            face_data = {
+                'location': face_location,
+                'x': left,
+                'y': top,
+                'width': right - left,
+                'height': bottom - top,
+                'encoding': encoding,
+                'is_target': False,
+                'similarity_score': 0.0,
+                'position_score': 1.0,
+                'size_score': 0.0
             }
-            face_dicts.append(face_dict)
             
-            if distance < threshold:
-                has_target = True
-                face_dict['is_target'] = True
-        
-        return has_target, face_dicts
-        
+            # Calculer la taille relative du visage
+            face_area = face_data['width'] * face_data['height']
+            frame_area = frame_width * frame_height
+            face_data['size_score'] = (face_area / frame_area) * 1000
+            
+            # Calculer le score de position (pénaliser les visages trop bas)
+            vertical_position = top / frame_height
+            if vertical_position > 0.7:  # Visage dans le tiers inférieur
+                face_data['position_score'] = 0.3
+            elif vertical_position > 0.5:  # Visage dans la moitié inférieure
+                face_data['position_score'] = 0.7
+            
+            # Si on a un visage cible, calculer la similarité
+            if target_encoding is not None:
+                distance = face_recognition.face_distance([target_encoding], encoding)[0]
+                face_data['similarity_score'] = 1.0 - distance
+                
+                if distance < similarity_threshold:
+                    face_data['is_target'] = True
+            
+            faces_data.append(face_data)
+            
     except Exception as e:
-        st.warning(f"⚠️ Erreur détection: {str(e)}")
-        return False, []
+        # Ignorer les erreurs silencieusement pour ne pas interrompre l'analyse
+        pass
+    
+    return faces_data
 
-def detect_faces_opencv(frame: np.ndarray) -> Tuple[bool, List[Dict]]:
+def calculate_face_score(faces_data: List[Dict], has_target: bool = False) -> float:
     """
-    Fallback: Détection de visages avec OpenCV Haar Cascades
+    Calcule un score global pour les visages détectés
     
     Args:
-        frame: Frame à analyser
-        
+        faces_data: Liste des visages détectés
+        has_target: Si on recherche un visage spécifique
+    
     Returns:
-        (has_faces, face_locations)
+        float: Score calculé
     """
-    try:
-        # Charger le classifier Haar Cascade
-        cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-        face_cascade = cv2.CascadeClassifier(cascade_path)
+    if not faces_data:
+        return 0.0
+    
+    total_score = 0.0
+    
+    for face in faces_data:
+        # Score de base : taille * position
+        face_score = face.get('size_score', 0) * face.get('position_score', 1)
         
-        # Convertir en niveaux de gris
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # Bonus si c'est le visage cible
+        if has_target and face.get('is_target', False):
+            face_score *= 3.0  # Triple le score pour le visage cible
         
-        # Détecter les visages
-        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
-        
-        face_dicts = []
-        for (x, y, w, h) in faces:
-            face_dicts.append({
-                'x': x,
-                'y': y,
-                'width': w,
-                'height': h
-            })
-        
-        return len(faces) > 0, face_dicts
-        
-    except Exception as e:
-        return False, []
+        total_score += face_score
+    
+    # Bonus si plusieurs visages (scène animée)
+    if len(faces_data) > 1:
+        total_score *= 1.2
+    
+    return total_score
 
-def get_face_regions_for_crop(frame: np.ndarray, target_encoding: Optional[np.ndarray] = None, threshold: float = 0.6) -> List[Dict]:
+def get_face_regions_for_crop(frame: np.ndarray, target_encoding: Optional[np.ndarray] = None,
+                              face_threshold: float = 0.4) -> List[Dict]:
     """
     Obtient les régions de visages pour le crop intelligent
     
     Args:
         frame: Frame à analyser
-        target_encoding: Encoding du visage cible
-        threshold: Seuil de similarité
-        
+        target_encoding: Encoding du visage cible (optionnel)
+        face_threshold: Seuil de similarité
+    
     Returns:
-        Liste des régions de visages
+        List[Dict]: Régions des visages pour le crop
     """
-    _, face_regions = detect_faces_in_frame(frame, target_encoding, threshold)
-    return face_regions
+    faces_data = detect_faces_in_frame(frame, target_encoding, model="hog",
+                                      similarity_threshold=face_threshold)
+    
+    # Si on a un visage cible, prioriser ses régions
+    if target_encoding is not None:
+        target_faces = [f for f in faces_data if f.get('is_target', False)]
+        if target_faces:
+            return target_faces
+    
+    # Sinon retourner tous les visages
+    return faces_data
 
-# Fonction de test pour vérifier la disponibilité
+def detect_faces_haar_cascade(frame: np.ndarray) -> List[Dict]:
+    """
+    Détection rapide de visages avec Haar Cascade (fallback)
+    
+    Args:
+        frame: Frame à analyser
+    
+    Returns:
+        List[Dict]: Liste des visages détectés
+    """
+    if not CV2_AVAILABLE:
+        return []
+        
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    
+    faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+    
+    faces_data = []
+    for (x, y, w, h) in faces:
+        faces_data.append({
+            'x': x,
+            'y': y,
+            'width': w,
+            'height': h,
+            'is_target': False,
+            'size_score': (w * h) / (frame.shape[0] * frame.shape[1]) * 1000
+        })
+    
+    return faces_data
+
+def is_face_in_good_position(face_data: Dict, frame_height: int) -> bool:
+    """
+    Vérifie si un visage est dans une bonne position (pas trop bas)
+    
+    Args:
+        face_data: Données du visage
+        frame_height: Hauteur de la frame
+    
+    Returns:
+        bool: True si la position est bonne
+    """
+    vertical_position = face_data['y'] / frame_height
+    return vertical_position < 0.7  # Pas dans le tiers inférieur
+
+# Fonction de compatibilité pour l'ancienne API
 def check_face_recognition_status():
     """
     Vérifie et affiche le statut du module face_recognition

@@ -1,14 +1,21 @@
+# Requirements pour YouTube Video Mixer Upload
+# Version locale avec reconnaissance faciale optionnelle
+
+# Core dependencies
 streamlit==1.29.0
 moviepy==1.0.1
 opencv-python-headless==4.8.1.78
 numpy==1.26.0
-face-recognition==1.3.0
-dlib-binary==19.21.99
 Pillow==10.0.1
 scipy==1.11.4
 imageio==2.33.1
 imageio-ffmpeg==0.4.9
 
-# Dépendances pour traitement vidéo
+# Utilities
 certifi
 brotli
+
+# Face recognition (optional - requires cmake)
+# Uncomment these lines if you have cmake installed:
+# face-recognition==1.3.0
+# dlib>=19.7
