@@ -1,0 +1,10 @@
+# Configuration Nixpacks pour Railway
+[phases.setup]
+nixPkgs = ["cmake", "boost", "ffmpeg", "libopenblas", "lapack"]
+aptPkgs = ["cmake", "build-essential", "libboost-all-dev", "ffmpeg"]
+
+[phases.install]
+cmds = ["pip install --upgrade pip", "pip install -r requirements.txt"]
+
+[start]
+cmd = "streamlit run upload_video_mixer.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true"

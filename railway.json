@@ -1,0 +1,19 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE"
+  },
+  "deploy": {
+    "startCommand": "streamlit run upload_video_mixer.py --server.port=$PORT --server.address=0.0.0.0",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  },
+  "environments": {
+    "production": {
+      "env": {
+        "IS_RAILWAY": "true",
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}
