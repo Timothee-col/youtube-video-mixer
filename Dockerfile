@@ -24,9 +24,9 @@ ENV IS_RAILWAY=true
 ENV PYTHONUNBUFFERED=1
 ENV NO_FACE_RECOGNITION=true
 
-# Script de démarrage qui gère le port dynamique
-RUN echo '#!/bin/bash\nstreamlit run upload_video_mixer.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true' > start.sh && \
-    chmod +x start.sh
+# Copier le script de démarrage Python
+COPY railway_start.py /app/railway_start.py
+RUN chmod +x /app/railway_start.py
 
-# Utiliser le script de démarrage
-CMD ["/bin/bash", "start.sh"]
+# Utiliser le script Python pour démarrer
+CMD ["python3", "/app/railway_start.py"]
