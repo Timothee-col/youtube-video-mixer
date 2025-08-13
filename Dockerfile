@@ -24,8 +24,7 @@ ENV IS_RAILWAY=true
 ENV PYTHONUNBUFFERED=1
 ENV NO_FACE_RECOGNITION=true
 
-# Commande de démarrage
-CMD streamlit run upload_video_mixer.py \
-    --server.port=$PORT \
-    --server.address=0.0.0.0 \
-    --server.headless=true
+# Commande de démarrage avec script wrapper
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+CMD ["/app/start.sh"]
